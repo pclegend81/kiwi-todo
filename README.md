@@ -1,84 +1,82 @@
-# KIWI待办小程序
+# KIWI Todo — WeChat Mini Program
 
-录入待办 → 定日定时提醒 → 回查历史提醒 → 每日提醒可跳过中国大陆节假日。
+[English](README.md) | [简体中文](README.zh-CN.md)
 
-## 功能
+KIWI Todo is a reminder-focused to-do app for WeChat. You capture a task once, and it keeps reminding you at the right moment — on a schedule you define, across your phone's native calendar, and through WeChat subscription messages even when the mini program is fully closed.
 
-| 功能 | 说明 |
-|---|---|
-| 待办录入 | 标题、备注、提醒日期、提醒时间、**优先级（高/中/低）** |
-| 重复提醒 | 仅一次 / 隔 X 日 / 隔 X 小时 / 隔 X 分钟 / 每周 / 每月 / 每年 / 每工作日，间隔均可调 |
-| 排序 | 待办页与提醒记录页都支持「按优先级」「按时间」一键切换 |
-| 筛选 | 按优先级（高/中/低）+ 日期范围 + 时间范围组合筛选，实时显示命中条数 |
-| 节假日跳过 | 法定放假日不打扰；可改为「顺延到下一个工作日」；调休补班日照常提醒 |
-| 历史提醒 | 每次到期自动生成记录，含「已提醒 / 节假日跳过」与优先级，支持按标题搜索 |
-| 完成方式 | **新增页可逐条选「需要手工确认完成」，默认关闭**：默认提醒发完就自动完成并归档；勾了才留在待办页标「待确认完成」、置顶，必须点「确认做完了」才进提醒记录（记录确认时间） |
-| 手机日历 | **新建保存时默认写一条手机系统日历事件**，由系统本地提醒，不耗微信额度、不用打开小程序；编辑页默认不重复写，另有「手动补写」按钮用于重试 / 改时间 |
-| 批量管理 | 右上角「批量管理」**默认全选**当前列表，可切「仅待确认 / 清空」，一次「确认完成」或「删除」多条；删除不可恢复，一律二次确认 |
-| 单条删除 | 每张待办卡片都有独立的「删除」按钮（长按菜单也可删），二次确认后删除，历史提醒记录会保留 |
-| 节假日维护 | 内置官方安排（含调休），可自行增删任意年份 |
-| 微信推送 | 可选：微信云开发云函数代发订阅消息（无需服务器/域名） |
+**Highlights**
 
-## 目录
+- **13 recurrence modes** — once, every X minutes/hours/days, weekly, monthly, yearly, and every-working-day, each with an adjustable interval. Start and end dates constrain any repeating rule, inclusive on both ends.
+- **Chinese public-holiday awareness** — reminders are silently skipped on statutory holidays, optionally *postponed to the next working day*, and make-up workdays (weekends where China requires work) are correctly treated as working days.
+- **Push that works when the app is closed** — a cloud function scans due reminders **every minute** and delivers WeChat subscription messages. No dedicated server, no domain whitelisting: everything runs on WeChat CloudBase.
+- **Native calendar integration** — every new task is written to the phone's system calendar by default (`wx.addPhoneCalendar`), so local system alarms fire without consuming WeChat's push-quota.
+- **Collaboration** — share a task as a WeChat card, or invite via a 6-character code; collaborators see the same todo list in real time.
+- **Configurable completion** — by default a finished reminder auto-archives; per-task you can require a manual "mark as done" confirmation instead.
+- **Batch management, filtering, history** — multi-select done/delete, combined priority + date-range + time-range filtering, and a searchable reminder log for every fired (or holiday-skipped) reminder.
+
+## Architecture
 
 ```
-├── pages/            小程序页面（index 待办 / edit 编辑 / history 提醒记录 / holidays 节假日 / mine 我的）
-├── utils/            云开发入口、数据层、提醒核心逻辑、节假日静态表
-├── cloudfunctions/   云函数（dataapi 批量读写 / pushapi 设备接口 / pusher 定时下发）
-├── tests/            冒烟测试与结构校验
-└── app.json          页面注册与 tabBar
+├── pages/            index (todo list) / edit / history / holidays / invite / mine
+├── utils/            store (data layer), reminder-core (scheduling engine), push, subscribe, collab
+├── cloudfunctions/
+│   ├── pusher/       timer-triggered (every minute) — scans due todos, sends subscription messages
+│   ├── pushapi/      device & quota API — authorization state, test pushes, health reporting
+│   └── dataapi/      batch writes & holiday pruning with admin privileges
+└── tests/            13 Node-based smoke & structure test suites
 ```
 
-## 一、导入微信开发者工具
+Key design points:
 
-1. 打开微信开发者工具 → 导入项目 → 选择本目录，AppID `wx79fbbd4f1cc1a4e3`。
-2. **直接点「编译」即可**，无 npm 依赖、无构建步骤。
-3. 首次进入点「微信一键登录」（通过云函数取 openid，无需鉴权服务）。
-4. 小程序须**未授权给第三方平台**，否则云开发整体被禁用（开发者工具会报 80210）。
+- **Cursor-based, idempotent push.** Each todo tracks a push cursor so the per-minute scanner never double-sends; a 15-minute window, a 2-hour backstop and a 200-item enumeration cap keep worst-case loops bounded. Push failures don't advance the cursor.
+- **Duplicate-share of one scheduling engine.** The exact same `reminder-core.js` file (md5-verified) ships in `utils/` and inside both push cloud functions, so the client's "catch-up reminders" and the cloud's push decisions can never disagree about what is due.
+- **Timezone-safe cloud functions.** WeChat cloud functions run in UTC; every function sets `process.env.TZ = 'Asia/Shanghai'` before any `Date` arithmetic, avoiding the classic 8-hour drift bugs.
+- **One-shot subscription quota management.** WeChat's subscription messages are consumed per authorization tap. A single guarded entry point (`utils/subscribe.js`) handles authorization, renewal and concurrency so quota is topped up on nearly every user interaction.
+- **Idempotent saves.** A client-token + page-lock + navigation-throttle stack makes double-taps and flaky networks produce at most one database write.
 
-> 数据与推送全部走微信云开发（`wx.cloud.callFunction` / 云数据库），不经过 request 域名校验，
-> 公众平台无需配置任何服务器域名。
+## Getting Started
 
-## 二、数据集合（云开发数据库）
+1. Open **WeChat DevTools** → Import project → select this directory. The mini program uses AppID `wx79fbbd4f1cc1a4e3` (replace with your own).
+2. Hit **Compile** — there are no npm dependencies and no build step.
+3. Log in with WeChat one-tap (openid is resolved through a cloud function; no auth server needed).
+4. Enable **CloudBase** in DevTools and create the database collections: `todos`, `remind_logs`, `holidays`, `push_devices`, `push_quotas`. Per-user isolation is enforced with custom security rules (`auth.openid == doc.openid`).
 
-| 集合 | 说明 | 安全规则 |
-|---|---|---|
-| `todos` | 待办，含重复方式与节假日策略 | 读写：`auth.openid == doc.openid` |
-| `remind_logs` | 每次提醒的记录（已提醒 / 节假日跳过） | 读写：`auth.openid == doc.openid` |
-| `holidays` | 节假日与调休补班日，公共数据 | 读：所有人；写：`auth.openid == doc.openid` |
-| `push_devices` / `push_quotas` | 推送设备与订阅额度（仅云函数读写） | 默认即可 |
+### Push delivery (optional but recommended)
 
-每条数据都带 `openid` 字段做归属；规则在「云开发控制台 → 数据库 → 集合 → 权限设置 → 自定义安全规则」粘贴。
+1. Pick a subscription-message template in the WeChat admin console and copy its template ID and keyword keys.
+2. Fill the template ID into `cloudfunctions/pushapi/index.js` and `cloudfunctions/pusher/index.js`.
+3. Deploy all three cloud functions ("upload & deploy"). For `pusher`, additionally right-click its `config.json` → **Upload trigger config** — this registers the every-minute timer that drives real pushes.
+4. In the mini program: *Mine → enable push → authorize one reminder → send a test push*.
 
+> Note: while the mini program is in trial/review, both cloud functions must set `MINIPROGRAM_STATE = 'trial'` (or `'developer'`); switch to `'formal'` after the official release. Without push enabled the app still works — due reminders are caught up on each launch.
 
-## 三、节假日规则
+## Holiday Rules
 
-- `holiday`（放假）：开启跳过时当日不提醒；选择顺延则推到下一个实际工作日。
-- `workday`（调休补班）：周末但需上班，照常提醒，不会被误判成节假日。
-- 「每工作日」重复按「周一至周五 + 调休补班日 − 法定放假日」推进。
+- `holiday` — a statutory day off: skipped when skip-holiday is on, or postponed to the next working day.
+- `workday` — a weekend make-up workday: still reminds, never misjudged as a holiday.
+- "Every working day" advances along Mon–Fri **plus** make-up workdays **minus** statutory holidays.
+- Built-in tables cover 2026–2027 (from the State Council announcement); users can add or override any year's arrangement in the Holidays page.
 
-2026 年数据来自国务院办公厅 2025-11-04 公布的安排（33 天放假 + 6 天调休）。
-
-## 四、微信推送（云开发，可选）
-
-小程序关闭后无法自行弹窗，若要在微信里真正收到通知，使用**微信云开发云函数**（无需服务器、无需配域名）：
-
-1. 在公众平台「订阅消息」里选用一个模板，记录模板 ID 和关键词技术名（`thing1` / `time2`…）。
-2. 把模板 ID 填进云函数 `cloudfunctions/pushapi/index.js` 与 `cloudfunctions/pusher/index.js` 的 `TEMPLATE_ID`（客户端无需任何配置，模板 ID 由 pushapi 的 `status` 接口下发）。
-3. 开发者工具「云开发」开通环境 → 数据库里建 4 个集合：`push_devices`、`push_todos`、`push_quotas`、`push_holidays`（pushapi 首次调用也会自动创建）。
-4. 右键 `cloudfunctions/dataapi` → 「上传并部署：云端安装依赖」（批量写提醒记录/节假日用，**必部署**：小程序端不支持数组批量插入，缺失会报「提醒同步失败」）；再对 `pushapi`、`pusher` 做同样操作，`pusher` 还要右键 → 「上传触发器」（每分钟扫描）。
-5. 小程序「我的」页：开启推送服务 → 申请一次提醒授权 → 发送测试提醒。
-
-注意：两个云函数里的 `MINIPROGRAM_STATE` 体验阶段用 `trial`，小程序正式发布上线后改成 `formal` 并重新部署。不开启推送也能正常使用：每次打开小程序会自动补记并提示到期提醒。
-
-## 五、测试
+## Tests
 
 ```bash
-node tests/smoke.js       # 提醒逻辑：周期推进、节假日跳过与顺延、月末溢出
-node tests/verify.js      # 项目结构与配置校验
-node tests/manual-done.js # 完成方式可配置：默认自动完成 / 勾了才手工确认
-node tests/auto-calendar.js # 新建默认写手机日历：调用时机 / 开关 / 失败兜底
-node tests/calendar.js    # 系统日历重复规则映射
+node tests/smoke.js          # recurrence engine: period advancing, holiday skip/postpone, month-end overflow
+node tests/cursor.js         # push cursors: separation, no-regress, failure doesn't advance
+node tests/repeat-workday.js # every-working-day recurrence across holidays & make-up days
+node tests/manual-done.js    # configurable completion: auto-archive vs manual confirm
+node tests/auto-calendar.js  # default calendar write on save: timing, toggle, fallback
+node tests/calendar.js       # recurrence → system calendar rule mapping
+node tests/save-guard.js     # idempotent save: client token, page lock, throttle
+node tests/batch-done.js     # batch completion
+node tests/batch-delete.js   # batch deletion
+node tests/compact-list.js   # layout height budget for the compact list
+node tests/subscribe.js      # subscription quota guard & throttle
+node tests/holidays-active.js# holiday year filtering
+node tests/verify.js         # project structure & config checks
 ```
 
-完整命令清单见 `PUBLISH.md`「发布前自检清单」。
+All 13 suites run with plain Node — no test framework required.
+
+## License
+
+This project is released for learning and portfolio purposes.
