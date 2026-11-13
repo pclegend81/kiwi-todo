@@ -1,0 +1,9 @@
+{
+  "name": "pushapi",
+  "version": "1.0.0",
+  "description": "KIWI待办 推送设备端接口：绑定、订阅额度、待办同步、测试下发",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

@@ -1,0 +1,39 @@
+<view class="container" bindtap="onAnyTap">
+
+  <view class="page-header">
+    <text class="page-title">我的</text>
+    <view class="page-subtitle">KIWI待办 · 云端同步</view>
+  </view>
+
+  <!-- 节假日维护置顶：放假 / 调休补班自行维护，改完对所有待办生效 -->
+  <view class="card" bindtap="goHolidays">
+    <view class="row-between">
+      <text class="title">节假日维护</text>
+      <text class="small muted">放假 / 调休补班 ›</text>
+    </view>
+    <view class="small muted" style="margin-top:10rpx">{{holidayHint}}</view>
+  </view>
+
+  <!-- 微信订阅消息推送：授权入口（只保留按钮，不加状态横幅/引导文案） -->
+  <view class="card">
+    <text class="title">微信订阅消息推送</text>
+    <view class="small muted" style="margin-top:10rpx">待办到点时通过微信服务通知提醒你。</view>
+    <view class="row auth-btns">
+      <view class="btn btn-ghost auth-btn" bindtap="onAuthTap">开启推送服务</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onRenewTap">补充提醒次数</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onTestTap">发送测试提醒</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="row-between">
+      <text class="title">{{signedIn ? '已登录' : '未登录'}}</text>
+      <text wx:if="{{signedIn}}" class="link" bindtap="onSignOut">退出登录</text>
+    </view>
+    <view class="small muted" style="margin-top:10rpx">
+      {{signedIn ? '待办与提醒记录已保存在云端，换设备自动同步。' : '登录后才能保存待办和提醒记录。'}}
+    </view>
+    <view wx:if="{{!signedIn}}" class="btn" style="margin-top:24rpx" bindtap="onLogin">微信一键登录</view>
+  </view>
+
+</view>

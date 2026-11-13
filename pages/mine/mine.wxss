@@ -1,0 +1,20 @@
+.link {
+  color: #007aff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+/* 授权按钮行：三个并排，等宽不折行 */
+.auth-btns {
+  display: flex;
+  gap: 14rpx;
+  margin-top: 20rpx;
+}
+
+.auth-btn {
+  flex: 1;
+  min-width: 0;
+  padding: 16rpx 0;
+  font-size: 27rpx;
+  font-weight: 600;
+}

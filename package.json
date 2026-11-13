@@ -1,0 +1,6 @@
+{
+  "name": "kiwi-todo-miniprogram",
+  "version": "1.0.0",
+  "description": "KIWI待办小程序：定时提醒、历史提醒查询、中国大陆节假日跳过",
+  "private": true
+}

@@ -1,0 +1,68 @@
+/**
+ * 自定义底部标签栏（iOS 27 Liquid Glass 风格浮动胶囊条）。
+ * 微信原生 tabBar 字号由系统固定（10px）不可调，改用自定义组件才能放大加粗。
+ *
+ * 两个关键坑：
+ * 1. 每个 tab 页有独立的组件实例，selected 初值都是 0；
+ *    页面 onShow 里 getTabBar() 可能还没挂载好（首次进入常见），
+ *    所以这里用当前路由反查 selected，不依赖页面回写。
+ * 2. 不能用 selected 做「点击去重」，否则状态一旦不同步，点击就会彻底失效。
+ */
+Component({
+  data: {
+    selected: 0,
+    list: [
+      { pagePath: 'pages/index/index', text: '待办' },
+      { pagePath: 'pages/history/history', text: '提醒记录' },
+      { pagePath: 'pages/mine/mine', text: '我的' },
+    ],
+  },
+
+  lifetimes: {
+    attached() {
+      this.syncFromRoute()
+    },
+    ready() {
+      this.syncFromRoute()
+    },
+  },
+
+  methods: {
+    /** 用当前页面路由反查选中项，避免依赖页面 onShow 的回写时机 */
+    syncFromRoute() {
+      const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
+      if (!pages.length) return
+      const current = pages[pages.length - 1]
+      const route = String((current && current.route) || '')
+      if (!route) return
+      for (let i = 0; i < this.data.list.length; i++) {
+        if (this.data.list[i].pagePath === route) {
+          if (i !== this.data.selected) this.setData({ selected: i })
+          return
+        }
+      }
+    },
+
+    onTab(e) {
+      const index = Number(e.currentTarget.dataset.index)
+      const item = this.data.list[index]
+      if (!item) return
+
+      const url = '/' + item.pagePath
+      const prev = this.data.selected
+      if (index !== prev) this.setData({ selected: index })
+
+      wx.switchTab({
+        url: url,
+        fail: (err) => {
+          if (index !== prev) this.setData({ selected: prev })
+          console.error('[tabbar] switchTab 失败', url, err)
+          wx.showToast({
+            title: '切换失败：' + ((err && err.errMsg) || '未知错误'),
+            icon: 'none',
+          })
+        },
+      })
+    },
+  },
+})

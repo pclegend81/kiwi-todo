@@ -1,0 +1,342 @@
+/* ==========================================================================
+   KIWI待办 · iOS 27 Liquid Glass 设计体系
+   - 字体：-apple-system（SF Pro / 苹方）优先，安卓回退思黑 / 雅黑；整体放大加粗
+   - 材质：玻璃卡（强漫射模糊 + 内侧高光 + 外侧暗边线），子内容保持扁平锐利
+   - 形状：连续圆角（外 32rpx，内 24rpx 同心），控件一律胶囊
+   - 强调色：iOS 蓝 #007AFF
+   ========================================================================== */
+
+page {
+  /* 渐变壁纸：玻璃需要有可折射的底色，纯色底看不出玻璃质感 */
+  background-color: #eef1f7;
+  background-image:
+    radial-gradient(620rpx 460rpx at 10% 4%, rgba(77, 141, 255, 0.30), rgba(77, 141, 255, 0) 62%),
+    radial-gradient(540rpx 400rpx at 90% 12%, rgba(151, 124, 255, 0.26), rgba(151, 124, 255, 0) 60%),
+    radial-gradient(600rpx 440rpx at 74% 96%, rgba(255, 159, 102, 0.20), rgba(255, 159, 102, 0) 62%),
+    linear-gradient(180deg, #f3f6fc 0%, #eef1f7 46%, #e8ecf5 100%);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  color: #10151c;
+  font-size: 32rpx;
+  font-weight: 400;
+  line-height: 1.55;
+  font-family: -apple-system, "SF Pro Text", "SF Pro Display", "PingFang SC",
+    "Helvetica Neue", Helvetica, "Microsoft YaHei", sans-serif;
+}
+
+/* 底部浮动标签栏（自定义 tabBar 108rpx）占位 */
+.container {
+  padding: 24rpx 24rpx 200rpx;
+}
+
+/* 批量模式下底部多一条浮动操作条，给列表留够空间，别压住最后一张卡 */
+/* 批量操作条是两行（约 190rpx）+ 底部 148rpx + 安全区，留足空间别压住最后一张卡 */
+.container-batch {
+  padding-bottom: 420rpx;
+}
+
+/* ── 玻璃材质 ───────────────────────────────────────────────────────────── */
+
+.card {
+  background: rgba(255, 255, 255, 0.62);
+  -webkit-backdrop-filter: blur(28rpx) saturate(180%);
+  backdrop-filter: blur(28rpx) saturate(180%);
+  border-radius: 32rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.8);
+  box-shadow:
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1rpx rgba(16, 24, 40, 0.05),
+    0 16rpx 40rpx rgba(16, 24, 40, 0.08);
+  padding: 32rpx;
+  margin-bottom: 24rpx;
+}
+
+/* 玻璃内的分组行：子级不再自带玻璃，只用细分隔线 */
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28rpx 0;
+  border-bottom: 1rpx solid rgba(16, 24, 40, 0.07);
+}
+
+.divider {
+  height: 1rpx;
+  background: rgba(16, 24, 40, 0.08);
+  margin: 24rpx 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* ── 字体层级 ───────────────────────────────────────────────────────────── */
+
+.page-header {
+  padding: 8rpx 8rpx 28rpx;
+}
+
+.page-title {
+  font-size: 56rpx;
+  font-weight: 800;
+  letter-spacing: -1rpx;
+  color: #10151c;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #5c6371;
+  margin-top: 8rpx;
+}
+
+.title {
+  font-size: 38rpx;
+  font-weight: 700;
+  letter-spacing: -0.5rpx;
+  color: #10151c;
+}
+
+.small {
+  font-size: 28rpx;
+}
+
+.muted {
+  color: #5c6371;
+}
+
+.empty {
+  padding: 120rpx 40rpx;
+  text-align: center;
+  font-size: 30rpx;
+  color: #5c6371;
+}
+
+/* ── 控件 ───────────────────────────────────────────────────────────────── */
+
+.btn {
+  background: linear-gradient(180deg, #3d9aff 0%, #007aff 100%);
+  color: #ffffff;
+  border-radius: 999rpx;
+  font-size: 34rpx;
+  font-weight: 700;
+  padding: 26rpx 0;
+  text-align: center;
+  box-shadow:
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.45),
+    0 10rpx 26rpx rgba(0, 122, 255, 0.30);
+}
+
+/* 保存 / 提交进行中：置灰提示不可再点（真正的拦截在页面 handler 里） */
+.btn-saving {
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.btn-ghost {
+  background: rgba(255, 255, 255, 0.72);
+  color: #007aff;
+  border: 2rpx solid rgba(0, 122, 255, 0.32);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+}
+
+.btn-danger {
+  background: rgba(255, 59, 48, 0.10);
+  color: #d70015;
+  border: 2rpx solid rgba(255, 59, 48, 0.30);
+  box-shadow: none;
+}
+
+.link {
+  color: #007aff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.field-label {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #10151c;
+}
+
+.input {
+  flex: 1;
+  text-align: right;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #007aff;
+}
+
+/* 分段控件（排序切换）：胶囊轨道 + 白色选中滑块 */
+.seg {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  padding: 6rpx;
+  border-radius: 999rpx;
+  background: rgba(120, 130, 150, 0.14);
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.6);
+}
+
+.seg-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 12rpx 26rpx;
+  border-radius: 999rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #5c6371;
+  line-height: 1.45;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.seg-item-on {
+  background: #ffffff;
+  color: #007aff;
+  font-weight: 700;
+  box-shadow:
+    0 2rpx 10rpx rgba(16, 24, 40, 0.14),
+    inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+}
+
+/* 筛选等独立玻璃胶囊 */
+.chip {
+  display: inline-block;
+  padding: 12rpx 26rpx;
+  margin-left: 12rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.66);
+  border: 1rpx solid rgba(255, 255, 255, 0.8);
+  color: #5c6371;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* 长内容（日期 10-20、时间 08:00）用的紧凑胶囊，保证一行放得下 */
+.chip-sm {
+  font-size: 26rpx;
+  padding: 10rpx 18rpx;
+  margin-left: 8rpx;
+}
+
+.chip-on {
+  background: rgba(0, 122, 255, 0.14);
+  border-color: rgba(0, 122, 255, 0.22);
+  color: #007aff;
+  font-weight: 700;
+}
+
+/* ── 标签 / 优先级 ───────────────────────────────────────────────────────── */
+
+/* 用 flex 居中而不是靠 line-height：CJK 字形在行盒里本来就偏下，
+   只有 align-items:center 才能让文字在胶囊里真正上下居中 */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tag-blue {
+  background: rgba(0, 122, 255, 0.12);
+  color: #007aff;
+}
+
+.tag-green {
+  background: rgba(52, 199, 89, 0.16);
+  color: #1a8a41;
+}
+
+.tag-orange {
+  background: rgba(255, 149, 0, 0.18);
+  color: #b45309;
+}
+
+.tag-gray {
+  background: rgba(120, 130, 150, 0.14);
+  color: #5c6371;
+}
+
+/* 提醒已发完但还没人工确认完成 */
+.tag-red {
+  background: rgba(255, 59, 48, 0.14);
+  color: #d70015;
+  font-weight: 700;
+}
+
+.tag-purple {
+  background: rgba(175, 82, 222, 0.16);
+  color: #8944ab;
+}
+
+.tag-indigo {
+  background: rgba(88, 86, 214, 0.16);
+  color: #4b49b5;
+}
+
+.priority-high {
+  background: rgba(255, 59, 48, 0.14);
+  color: #d70015;
+  font-weight: 700;
+}
+
+.priority-medium {
+  background: rgba(255, 149, 0, 0.20);
+  color: #b45309;
+  font-weight: 700;
+}
+
+.priority-low {
+  background: rgba(120, 130, 150, 0.14);
+  color: #5c6371;
+  font-weight: 600;
+}
+
+/* ── 手工确认完成的待办（只在「提醒记录」页展示）─────────────────────── */
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #5c6371;
+  margin: 36rpx 0 16rpx 8rpx;
+}
+
+.finished-card {
+  opacity: 0.85;
+}
+
+.finished-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #5c6371;
+  text-decoration: line-through;
+}
+
+.tip {
+  display: block;
+  margin-top: 20rpx;
+  text-align: center;
+  line-height: 1.6;
+}

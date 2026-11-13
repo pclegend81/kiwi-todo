@@ -1,0 +1,5 @@
+# 含密钥，禁止提交 / 打包
+server/config.json
+server/data.json
+project.private.config.json
+node_modules/

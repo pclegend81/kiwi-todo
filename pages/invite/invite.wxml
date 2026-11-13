@@ -1,0 +1,121 @@
+<view class="container" bindtap="onAnyTap">
+
+  <view wx:if="{{loading}}" class="empty">加载中…</view>
+
+  <block wx:if="{{!loading && errorText}}">
+    <view class="card">
+      <view class="title">无法打开邀请</view>
+      <view class="small muted" style="margin-top:12rpx">{{errorText}}</view>
+      <view class="btn btn-ghost" style="margin-top:28rpx" bindtap="goHome">回到待办</view>
+    </view>
+  </block>
+
+  <block wx:if="{{!loading && !errorText}}">
+
+    <view class="invite-hero">
+      <view class="invite-hero-title">{{fromNew ? '邀请好友一起提醒' : '好友邀请你一起提醒'}}</view>
+      <view class="invite-hero-sub">{{fromNew ? '选好微信好友发送，对方同意后就会一起收到提醒' : '同意后这条待办会加到你的列表，到点时大家会一起收到微信提醒'}}</view>
+    </view>
+
+    <view class="card">
+      <view class="row-between">
+        <text class="title todo-title">{{title}}</text>
+        <view class="tag tag-blue">{{repeatText}}</view>
+      </view>
+
+      <view wx:if="{{note}}" class="small muted note">{{note}}</view>
+
+      <view wx:if="{{images.length}}" class="img-grid">
+        <image
+          wx:for="{{images}}"
+          wx:key="*this"
+          class="img-thumb"
+          src="{{item}}"
+          mode="aspectFill"
+          data-src="{{item}}"
+          bindtap="onPreviewImage"
+        />
+      </view>
+
+      <view wx:if="{{location}}" class="loc-row" bindtap="onOpenLocation">
+        <view class="loc-text">
+          <text class="loc-name">{{location.name}}</text>
+          <text class="small muted loc-addr">{{location.address}}</text>
+        </view>
+        <text class="small link">查看地图</text>
+      </view>
+
+      <view class="divider"></view>
+
+      <view class="kv">
+        <text class="kv-label">首次提醒</text>
+        <text class="kv-value">{{remindText}}</text>
+      </view>
+
+      <view wx:if="{{datesText}}" class="kv">
+        <text class="kv-label">指定日期</text>
+        <text class="kv-value">{{datesText}}</text>
+      </view>
+
+      <view class="kv">
+        <text class="kv-label">优先级</text>
+        <view class="tag priority-{{priorityKey}}">{{priorityText}}</view>
+      </view>
+
+      <view class="kv">
+        <text class="kv-label">节假日</text>
+        <view class="tag tag-gray">{{holidayText}}</view>
+      </view>
+
+      <view class="kv">
+        <text class="kv-label">参与人数</text>
+        <text class="kv-value">{{memberCount}} 人</text>
+      </view>
+    </view>
+
+    <view wx:if="{{isOwner}}" class="card">
+      <view class="title">{{fromNew ? '选择微信好友' : '这是你发出的邀请'}}</view>
+      <view class="small muted" style="margin-top:12rpx">
+        微信不开放好友列表，小程序里画不出好友选择器。点下面的按钮会唤起微信，
+        你在微信的选人界面里挑好友或群发送即可。
+      </view>
+      <button class="btn share-btn" open-type="share">选择微信好友</button>
+
+      <block wx:if="{{code}}">
+        <view class="divider"></view>
+        <view class="kv">
+          <text class="kv-label">邀请码</text>
+          <view class="row">
+            <text class="code-text">{{code}}</text>
+            <view class="btn-mini" bindtap="onCopyCode">复制</view>
+          </view>
+        </view>
+        <view class="small muted tip">
+          不想转发、或临时要加别人时，把这个 6 位码发给对方，
+          他在「我的 → 加入协作」里输入即可，不用等你发卡片。
+        </view>
+
+        <view wx:if="{{memberNames.length}}" class="divider"></view>
+        <view wx:if="{{memberNames.length}}" class="kv">
+          <text class="kv-label">已加入</text>
+          <text class="kv-value">{{memberNames.length}} 人</text>
+        </view>
+        <view wx:if="{{memberNames.length}}" class="member-row">
+          <view wx:for="{{memberNames}}" wx:key="*this" class="tag tag-indigo">{{item}}</view>
+        </view>
+      </block>
+    </view>
+
+    <view wx:elif="{{joined}}" class="card">
+      <view class="title">你已加入这条协作提醒</view>
+      <view class="small muted" style="margin-top:12rpx">到点会和其他成员一起收到微信提醒。</view>
+      <view class="btn" style="margin-top:28rpx" bindtap="goHome">查看我的待办</view>
+    </view>
+
+    <block wx:else>
+      <view class="btn" bindtap="onAccept">{{busy ? '加入中…' : '接受并加入'}}</view>
+      <view class="small muted tip">加入后这条待办会出现在你的列表里，随时可以退出协作。</view>
+    </block>
+
+  </block>
+</view>

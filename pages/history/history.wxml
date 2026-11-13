@@ -1,0 +1,200 @@
+<view class="container" bindtap="onAnyTap">
+
+  <view class="page-header">
+    <view class="row-between">
+      <text class="page-title">提醒记录</text>
+      <view class="seg">
+        <text class="seg-item {{viewMode === 'calendar' ? 'seg-item-on' : ''}}" data-mode="calendar" bindtap="onViewMode">按日历</text>
+        <text class="seg-item {{viewMode === 'list' ? 'seg-item-on' : ''}}" data-mode="list" bindtap="onViewMode">按列表</text>
+      </view>
+    </view>
+    <view class="page-subtitle">共 {{total}} 条 · 到期自动生成，可回查历史</view>
+  </view>
+
+  <block wx:if="{{viewMode === 'calendar'}}">
+    <view class="card">
+      <view class="row-between">
+        <text class="cal-title">{{calTitle}}</text>
+        <view class="row">
+          <text class="chip" bindtap="onToday">今天</text>
+          <text class="chip" bindtap="onPrevMonth">‹</text>
+          <text class="chip" bindtap="onNextMonth">›</text>
+        </view>
+      </view>
+
+      <view class="cal-week">
+        <text wx:for="{{weekLabels}}" wx:key="*this" class="cal-week-item">{{item}}</text>
+      </view>
+
+      <view class="cal-grid">
+        <view
+          wx:for="{{calDays}}"
+          wx:key="key"
+          class="cal-cell {{item.inMonth ? '' : 'cal-cell-out'}}"
+          data-date="{{item.key}}"
+          bindtap="onSelectDay"
+        >
+          <view class="cal-num {{item.isToday ? 'cal-num-today' : ''}} {{item.selected ? 'cal-num-on' : ''}}">{{item.day}}</view>
+          <view class="cal-dots">
+            <text wx:if="{{item.count > 0}}" class="cal-dot"></text>
+            <text wx:if="{{item.count > 1}}" class="cal-dot"></text>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card">
+      <view class="row-between">
+        <text class="title">{{calSelectedText}}</text>
+        <text class="small muted">{{dayLogs.length}} 条</text>
+      </view>
+      <view wx:if="{{dayLogs.length === 0}}" class="small muted" style="margin-top:16rpx">这一天没有提醒记录</view>
+
+      <view
+        wx:for="{{dayLogs}}"
+        wx:key="id"
+        class="day-card"
+        bindlongpress="onLongPress"
+        data-id="{{item.id}}"
+        data-title="{{item.todoTitle}}"
+      >
+        <view class="row-between">
+          <text class="log-title">{{item.timeText}} {{item.todoTitle}}</text>
+          <view class="tag {{item.status === 'skipped' ? 'tag-orange' : 'tag-green'}}">{{item.status === 'skipped' ? '节假日跳过' : '已提醒'}}</view>
+        </view>
+        <view class="row" style="margin-top:10rpx">
+          <view class="tag priority-{{item.priority}}">优先级 {{item.priorityText}}</view>
+        </view>
+        <view wx:if="{{item.remark}}" class="small remark">{{item.remark}}</view>
+      </view>
+    </view>
+  </block>
+
+  <view class="card">
+    <input
+      class="search-input"
+      placeholder="搜索提醒标题"
+      maxlength="30"
+      value="{{keyword}}"
+      bindinput="onKeyword"
+      bindconfirm="onSearch"
+    />
+    <view class="row-between" style="margin-top:20rpx">
+      <text class="small muted">排序</text>
+      <view class="row">
+        <view class="seg">
+          <text class="seg-item {{sortMode === 'priority' ? 'seg-item-on' : ''}}" data-mode="priority" bindtap="onSort">按优先级</text>
+          <text class="seg-item {{sortMode === 'time' ? 'seg-item-on' : ''}}" data-mode="time" bindtap="onSort">按时间</text>
+        </view>
+        <text class="chip" bindtap="onToggleFilter">{{showFilter ? '收起筛选' : '筛选'}}</text>
+      </view>
+    </view>
+
+    <block wx:if="{{showFilter}}">
+      <view class="divider"></view>
+      <view class="row-between">
+        <text class="small muted">优先级</text>
+        <view class="row">
+          <text
+            wx:for="{{priorityFilters}}"
+            wx:key="key"
+            class="chip {{filterPriority === item.key ? 'chip-on' : ''}}"
+            data-value="{{item.key}}"
+            bindtap="onPriorityFilter"
+          >{{item.name}}</text>
+        </view>
+      </view>
+
+      <view class="row-between" style="margin-top:16rpx">
+        <text class="small muted">日期范围</text>
+        <view class="row">
+          <picker mode="date" value="{{dateFrom}}" bindchange="onDateFrom">
+            <text class="chip chip-sm">{{dateFromText || '开始'}}</text>
+          </picker>
+          <text class="small muted" style="margin:0 6rpx">~</text>
+          <picker mode="date" value="{{dateTo}}" bindchange="onDateTo">
+            <text class="chip chip-sm">{{dateToText || '结束'}}</text>
+          </picker>
+        </view>
+      </view>
+
+      <view class="row-between" style="margin-top:16rpx">
+        <text class="small muted">时间范围</text>
+        <view class="row">
+          <picker mode="time" value="{{timeFrom}}" bindchange="onTimeFrom">
+            <text class="chip chip-sm">{{timeFrom || '开始'}}</text>
+          </picker>
+          <text class="small muted" style="margin:0 6rpx">~</text>
+          <picker mode="time" value="{{timeTo}}" bindchange="onTimeTo">
+            <text class="chip chip-sm">{{timeTo || '结束'}}</text>
+          </picker>
+        </view>
+      </view>
+
+      <view class="row-between" style="margin-top:16rpx">
+        <text class="small muted">{{filterText || '未设置筛选条件'}}</text>
+        <text class="link" bindtap="onClearFilter">重置</text>
+      </view>
+    </block>
+  </view>
+
+  <view wx:if="{{!signedIn}}" class="empty">
+    <view>请先登录后再查看提醒记录</view>
+  </view>
+
+  <view wx:if="{{loading && logs.length === 0}}" class="empty">加载中…</view>
+
+  <view wx:if="{{viewMode === 'list' && signedIn && !loading && logs.length === 0}}" class="empty">
+    <view>还没有符合条件的提醒记录</view>
+    <view class="small" style="margin-top:16rpx">待办到期后，这里会自动留下一条记录</view>
+  </view>
+
+  <block wx:if="{{viewMode === 'list'}}">
+    <view wx:if="{{signedIn && logs.length > 0}}" class="small muted" style="margin:0 8rpx 16rpx">
+      点任意一条记录可顺手补 1 次微信提醒次数；长按可删除。
+    </view>
+    <view
+      wx:for="{{logs}}"
+      wx:key="id"
+      class="card log-card"
+      bindtap="onLogItem"
+      bindlongpress="onLongPress"
+      data-id="{{item.id}}"
+      data-title="{{item.todoTitle}}"
+    >
+      <view class="row-between">
+        <text class="log-title">{{item.todoTitle}}</text>
+        <view class="tag {{item.status === 'skipped' ? 'tag-orange' : 'tag-green'}}">{{item.status === 'skipped' ? '节假日跳过' : '已提醒'}}</view>
+      </view>
+      <view class="row" style="margin-top:10rpx">
+        <view class="tag priority-{{item.priority}}">优先级 {{item.priorityText}}</view>
+      </view>
+      <view class="small muted" style="margin-top:10rpx">提醒时间 {{item.atText}}</view>
+      <view wx:if="{{item.remark}}" class="small remark">{{item.remark}}</view>
+    </view>
+  </block>
+
+  <!-- 手工确认完成的 + 默认自动完成的都收在这里 -->
+  <block wx:if="{{signedIn && finishedItems.length > 0}}">
+    <view class="section-title">已完成的待办（{{finishedItems.length}}）</view>
+    <view
+      wx:for="{{finishedItems}}"
+      wx:key="id"
+      class="card finished-card"
+      bindtap="goEditTodo"
+      data-id="{{item.id}}"
+    >
+      <view class="row-between">
+        <text class="finished-title">{{item.title}}</text>
+        <view class="tag tag-gray">{{item.repeatText}}</view>
+      </view>
+      <view class="row" style="margin-top:10rpx">
+        <view class="tag priority-{{item.priority}}">优先级 {{item.priorityText}}</view>
+        <view class="tag tag-gray">{{item.doneText}}</view>
+      </view>
+      <view class="small muted" style="margin-top:10rpx">首次提醒 {{item.remindText}}<block wx:if="{{item.lastText}}"> · 最后一次 {{item.lastText}}</block><block wx:if="{{item.doneAtText}}"> · {{item.doneAtText}} 手工确认完成</block></view>
+    </view>
+    <view class="small muted tip">默认提醒发完自动完成并归档；新增时勾了「需要手工确认完成」的，会留在待办页等你确认后才到这里。点开可以重新编辑，保存后回到待办列表。</view>
+  </block>
+
+</view>

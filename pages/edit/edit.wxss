@@ -1,0 +1,357 @@
+.note-area {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 180rpx;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1rpx solid rgba(255, 255, 255, 0.8);
+  border-radius: 24rpx;
+  padding: 24rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  line-height: 1.6;
+  color: #10151c;
+  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.9);
+}
+
+.picker-value {
+  color: #007aff;
+  font-size: 32rpx;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.next-text {
+  color: #007aff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+/* 去掉原生 button 的默认样式，视觉上与普通 .btn 一致 */
+.share-btn {
+  margin-top: 28rpx;
+  padding: 0;
+  line-height: 1;
+}
+
+.share-btn::after {
+  border: none;
+}
+
+/* ── 附件：图片 / 位置 ─────────────────────────────────────────────────── */
+
+.sub-field {
+  margin-top: 28rpx;
+}
+
+.img-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 20rpx;
+}
+
+.img-cell {
+  position: relative;
+  width: 150rpx;
+  height: 150rpx;
+  margin: 0 16rpx 16rpx 0;
+}
+
+.img-thumb {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 20rpx;
+  background: rgba(120, 130, 150, 0.12);
+  display: block;
+}
+
+/* 删除按钮压在缩略图右上角 */
+.img-del {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: rgba(215, 0, 21, 0.92);
+  color: #ffffff;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.img-add {
+  width: 150rpx;
+  height: 150rpx;
+  margin: 0 16rpx 16rpx 0;
+  border-radius: 20rpx;
+  border: 2rpx dashed rgba(0, 122, 255, 0.45);
+  background: rgba(0, 122, 255, 0.06);
+  color: #007aff;
+  font-size: 56rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 20rpx;
+  background: rgba(120, 130, 150, 0.10);
+}
+
+.loc-text {
+  flex: 1;
+  min-width: 0;
+  margin-right: 20rpx;
+}
+
+/* 位置名称/地址单行省略，避免撑破卡片 */
+.loc-name,
+.loc-addr {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.loc-name {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #007aff;
+}
+
+.loc-addr {
+  margin-top: 6rpx;
+  font-size: 26rpx;
+}
+
+.btn-inline {
+  flex: 1;
+  font-size: 30rpx;
+  padding: 20rpx 0;
+}
+
+/* ── 自定义滚轮选择器（替代原生 picker，字号与页面标签一致）────── */
+.cp-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(16, 24, 40, 0.4);
+  z-index: 1000;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s;
+}
+
+.cp-mask.cp-show {
+  opacity: 1;
+  visibility: visible;
+}
+
+.cp-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f7f8fc;
+  border-radius: 32rpx 32rpx 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.cp-mask.cp-show .cp-panel {
+  transform: translateY(0);
+}
+
+.cp-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24rpx 32rpx 8rpx;
+}
+
+.cp-cancel {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #5c6371;
+}
+
+.cp-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #5c6371;
+}
+
+.cp-confirm {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #007aff;
+}
+
+.cp-view {
+  height: 440rpx; /* 5 行 × 88rpx */
+}
+
+.cp-item {
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #10151c;
+}
+
+/* ── 按日历选择：月历多选面板 ─────────────────────────────────────────── */
+
+.chip-wrap {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.cal-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: #f7f8fc;
+  border-radius: 32rpx 32rpx 0 0;
+  padding-bottom: env(safe-area-inset-bottom);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.cp-mask.cp-show .cal-panel {
+  transform: translateY(0);
+}
+
+/* 星期表头与日期格子用同一套尺寸（96rpx + 6rpx 间距），保证列对齐：
+   7 × 96 + 6 × 6 = 708rpx，面板内可用宽 750 - 16 × 2 = 718rpx */
+.cal-week {
+  display: flex;
+  padding: 8rpx 16rpx;
+}
+
+.cal-week-cell {
+  width: 96rpx;
+  margin-right: 6rpx;
+  text-align: center;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #5c6371;
+}
+
+.cal-week-cell:last-child {
+  margin-right: 0;
+}
+
+.cal-body {
+  height: 720rpx;
+  padding: 0 16rpx;
+  box-sizing: border-box;
+}
+
+.cal-month-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #10151c;
+  padding: 16rpx 0 8rpx;
+}
+
+.cal-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+/* 7 列网格：7 × 96rpx + 6 × 6rpx 间距 = 708rpx */
+.cal-cell {
+  width: 96rpx;
+  height: 96rpx;
+  margin: 0 6rpx 6rpx 0;
+  border-radius: 20rpx;
+  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.cal-cell:nth-child(7n) {
+  margin-right: 0;
+}
+
+.cal-cell-blank {
+  background: transparent;
+}
+
+.cal-day {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #10151c;
+  line-height: 1.1;
+}
+
+.cal-mark {
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #b45309;
+  line-height: 1.2;
+  height: 24rpx;
+}
+
+.cal-cell-past .cal-day {
+  color: #9aa1ad;
+}
+
+.cal-cell-today .cal-day {
+  color: #007aff;
+}
+
+/* 法定节假日底色，提醒用户这天会被跳过/顺延 */
+.cal-cell-off {
+  background: rgba(255, 149, 0, 0.12);
+}
+
+.cal-cell-on {
+  background: #007aff;
+}
+
+.cal-cell-on .cal-day,
+.cal-cell-on .cal-mark {
+  color: #ffffff;
+}
+
+.cal-more {
+  margin: 12rpx 0;
+  padding: 22rpx 0;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #007aff;
+  background: rgba(0, 122, 255, 0.08);
+  border-radius: 20rpx;
+}
+
+.cal-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12rpx 32rpx 24rpx;
+}
+
+.cal-clear {
+  flex-shrink: 0;
+  margin-left: 24rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #d70015;
+}

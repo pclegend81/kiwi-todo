@@ -1,0 +1,9 @@
+{
+  "name": "pusher",
+  "version": "1.0.0",
+  "description": "KIWI待办 定时扫描下发订阅消息",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

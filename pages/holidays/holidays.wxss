@@ -1,0 +1,92 @@
+.picker-value {
+  color: #007aff;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.holiday-day {
+  font-size: 34rpx;
+  font-weight: 700;
+  letter-spacing: -0.5rpx;
+  color: #10151c;
+}
+
+.link {
+  color: #007aff;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.seed-mark {
+  color: #8a94a6;
+  font-size: 24rpx;
+}
+
+/* 逐条编辑 / 删除 */
+.holiday-card {
+  position: relative;
+}
+
+.holiday-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.mini-btn {
+  flex-shrink: 0;
+  min-width: 108rpx;
+  padding: 10rpx 24rpx;
+  border: 1rpx solid #d7dde8;
+  border-radius: 999rpx;
+  color: #2c3542;
+  font-size: 26rpx;
+  line-height: 1.5;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.mini-btn-danger {
+  border-color: #f0c9c9;
+  color: #d0453f;
+}
+
+/* 编辑弹层 */
+.modal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 100;
+  background: rgba(16, 21, 28, 0.45);
+  display: flex;
+  align-items: flex-end;
+}
+
+.modal-panel {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 36rpx 32rpx calc(40rpx + env(safe-area-inset-bottom));
+  background: #fff;
+  border-radius: 28rpx 28rpx 0 0;
+}
+
+.modal-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #10151c;
+  margin-bottom: 20rpx;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 32rpx;
+}
+
+.modal-btn {
+  flex: 1;
+  margin-top: 0;
+}

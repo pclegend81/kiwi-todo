@@ -1,0 +1,9 @@
+{
+  "name": "dataapi",
+  "version": "1.0.0",
+  "description": "KIWI待办 云数据库批量读写（批量插入提醒记录 / 节假日）",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}
