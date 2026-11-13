@@ -31,6 +31,7 @@ test('必要文件齐全', () => {
     'index.html', 'app.js', 'manifest.json', 'sw.js',
     'reminder-core.js', 'holidays-2027.js',
     'icon-192.png', 'icon-512.png', 'vendor/vue.global.prod.js',
+    'oauth-callback.html',
   ]
   for (const f of need) {
     assert.ok(fs.existsSync(path.join(WEB, f)), '缺少 ' + f)
@@ -225,6 +226,43 @@ test('桌面增强功能：搜索 / 计数 / 下一次提醒 / 快捷键', () =>
   assert.ok(js.includes("document.removeEventListener('keydown'"), '快捷键未卸载')
   // 搜索只影响桌面显示，不能改变写入云端的字段形状
   assert.ok(js.includes('remind_at: iso') && js.includes("status: 'active'"), '保存字段被改动')
+})
+
+test('第三方账号登录：五个平台适配器且凭证只来自环境变量', () => {
+  const oa = read(path.join(ROOT, 'cloudfunctions', 'webapi', 'oauth.js'))
+  for (const p of ['github', 'google', 'apple', 'x', 'wechat']) {
+    assert.ok(oa.includes("id: '" + p + "'"), '缺少 ' + p + ' 适配器')
+  }
+  assert.ok(oa.includes('process.env[name]'), '凭证必须读环境变量')
+  assert.ok(oa.includes("crypto.createHmac('sha256'"), 'state 必须签名')
+  assert.ok(oa.includes("code_challenge_method', 'S256'"), 'PKCE 缺失')
+  const idx = read(path.join(ROOT, 'cloudfunctions', 'webapi', 'index.js'))
+  for (const a of ['oauthProviders', 'oauthStart', 'oauthCallback', 'linkWechat', 'accountInfo']) {
+    assert.ok(idx.includes("action === '" + a + "'"), 'webapi 未注册 ' + a)
+  }
+  assert.ok(idx.includes('requireLink(row)'), 'CRUD 必须拦截未关联会话')
+})
+
+test('登录前端：回调页 / 已配置才渲染按钮 / 关联引导 / SW 不缓存回调', () => {
+  const cbPath = path.join(WEB, 'oauth-callback.html')
+  assert.ok(fs.existsSync(cbPath))
+  const cb = read(cbPath)
+  assert.ok(cb.includes('sessionStorage') && cb.includes("'oauthCallback'"))
+  assert.ok(cb.includes('kiwi_web_token'), '回调页必须写入 token')
+  assert.ok(cb.includes("params.get('state') !== saved.state"), '回调页必须校验 state')
+  assert.ok(html.includes('v-if="providers.length"'), '未配置平台不能渲染按钮')
+  assert.ok(html.includes('showProviderStatus'), '缺账号接入状态清单')
+  assert.ok(html.includes('account.needsLink'), '缺关联小程序引导条')
+  const js = read(path.join(WEB, 'app.js'))
+  for (const k of ['oauthLogin', 'loadProviders', 'loadAccount', 'linkWechat', 'oauthRedirect']) {
+    assert.ok(js.includes(k), 'app.js 缺少 ' + k)
+  }
+  assert.ok(js.includes('if (e.status === 401) self.doUnbindLocal()'),
+    '409 NEED_LINK 不能被当成会话失效踢回登录页')
+  const sw = read(path.join(WEB, 'sw.js'))
+  assert.ok(sw.includes("url.pathname.indexOf('oauth-callback.html') >= 0"),
+    '带 code/state 的回调页绝不能进离线缓存')
+  assert.ok(sw.includes("'kiwi-web-v3'"), 'SW 缓存版本未升级，老设备会吃到旧资源')
 })
 
 console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败')

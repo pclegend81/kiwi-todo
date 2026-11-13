@@ -17,6 +17,9 @@ KIWI Todo is a reminder-focused to-do app for WeChat. You capture a task once, a
 - **Batch management, filtering, history** — multi-select done/delete, combined priority + date-range + time-range filtering, and a searchable reminder log for every fired (or holiday-skipped) reminder.
 
 - **One codebase, three platforms.** A responsive PWA (`webapp/`) shares the same CloudBase `todos` collection with the mini program through an 8-character sync code and token binding. At ≥980px it becomes a desktop workbench — sidebar navigation, multi-column card grid, search toolbar, two-column editor and keyboard shortcuts — while phones keep a single-column UI installable to the home screen.
+- **Pluggable social sign-in.** A single `webapi` adapter module supports GitHub, Google, Apple (ES256 client-secret signed locally), X (mandatory PKCE) and WeChat web QR login. Credentials live only in cloud-function environment variables; an unconfigured provider is automatically hidden rather than shown as a dead button. Every account converges on one `kiwi_uid` via `users` / `identities`, and is merged with the mini program's `openid` once via the sync code — so the pusher cloud function needs no changes at all.
+
+![Multi-account sign-in — providers appear only when configured](dist/oauth-login-preview.png)
 
 ## Architecture
 
@@ -26,8 +29,10 @@ KIWI Todo is a reminder-focused to-do app for WeChat. You capture a task once, a
 ├── cloudfunctions/
 │   ├── pusher/       timer-triggered (every minute) — scans due todos, sends subscription messages
 │   ├── pushapi/      device & quota API — authorization state, test pushes, health reporting
-│   └── dataapi/      batch writes & holiday pruning with admin privileges
-└── tests/            13 Node-based smoke & structure test suites
+│   ├── dataapi/      batch writes & holiday pruning with admin privileges
+│   └── webapi/       HTTP API for the PWA: sync code, todo CRUD, and 5 OAuth providers
+├── webapp/           responsive PWA (desktop workbench + mobile home-screen app)
+└── tests/            16 Node-based smoke & structure test suites
 ```
 
 Key design points:
@@ -77,9 +82,12 @@ node tests/compact-list.js   # layout height budget for the compact list
 node tests/subscribe.js      # subscription quota guard & throttle
 node tests/holidays-active.js# holiday year filtering
 node tests/verify.js         # project structure & config checks
+node tests/webapi.js         # HTTP API: token/CRUD/whitelist/cursors/idempotency (mock DB)
+node tests/webapp.js         # compiles the Vue template in Node; assets, md5 parity, PWA manifest
+node tests/oauth.js          # 5 providers, signed state, PKCE, account merge (mock HTTP + DB)
 ```
 
-All 13 suites run with plain Node — no test framework required.
+All 16 suites run with plain Node — no test framework, no real credentials and no network calls.
 
 ## License
 

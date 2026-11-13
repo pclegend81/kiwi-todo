@@ -3,7 +3,7 @@
  * 策略：静态资源「网络优先 + 离线回退缓存」，保证改版能及时生效，断网也能打开界面；
  *       API 请求（POST 到云函数 HTTP 访问服务）一律直连网络，绝不缓存。
  */
-var CACHE = 'kiwi-web-v2'
+var CACHE = 'kiwi-web-v3'
 var ASSETS = [
   './',
   './index.html',
@@ -42,6 +42,8 @@ self.addEventListener('fetch', function (e) {
   var url
   try { url = new URL(req.url) } catch (err) { return }
   if (url.origin !== self.location.origin) return
+  // OAuth 回调页的 URL 带 code/state，绝不能进离线缓存（授权码落磁盘有泄露风险）
+  if (url.pathname.indexOf('oauth-callback.html') >= 0) return
 
   e.respondWith(
     fetch(req)

@@ -4,25 +4,35 @@
  * 供 Web/PWA（PC 浏览器、安卓/iOS 浏览器添加到主屏）通过 HTTP 访问服务调用，
  * 与微信小程序共用同一个云开发数据库，实现多端互相同步。
  *
- * 身份模型（无微信 openid）：
- *   1. 小程序「我的」页生成 8 位同步口令 + 随机 token，写入 web_bindings 集合；
- *   2. 网页端输入口令 -> bind 换 token（口令短是为了好输入，真正鉴权靠 token）；
- *   3. 之后所有请求都带 token，按 token 查回 openid 后操作 todos，
- *      与小程序写入的数据完全同构（同一套字段、同一套提醒逻辑）。
+ * 身份模型（两条路最终都汇聚到微信 openid，因此 pusher 一行都不用改）：
+ *   A. 同步口令：小程序「我的」生成 8 位口令 + token 写入 web_bindings；
+ *      网页端 bind 换 token，记录里直接带 openid，随即可读写 todos。
+ *   B. 第三方登录：Google / Apple / GitHub / X / 微信网页应用 OAuth 回来后，
+ *      以「平台 + 平台内唯一 ID」查 identities -> kiwi_uid（users 表）-> 签发 token。
+ *      此时 openid 为空、会话处于 NEED_LINK 状态；用户填一次小程序里的 8 位口令
+ *      （linkWechat）把 openid 合并进 kiwi_uid，之后与 A 完全等价。
+ *      多个第三方账号合并到同一个微信时，会收敛到同一个 kiwi_uid、同一份 todos。
  *
  * 支持的 action（HTTP event 体 JSON 字段）：
- *   bind        —— { code }                  -> { ok, token, openid }
- *   unbind      —— { token }                 -> { ok }  作废绑定（用户在小程序端也可作废）
- *   listTodos   —— { token }                 -> { ok, todos }
- *   insertTodo  —— { token, todo }           -> { ok, id }
- *   updateTodo  —— { token, id, patch }      -> { ok }
- *   removeTodo  —— { token, id }             -> { ok }
- *   stats       —— { token }                 -> { ok, counts } 供网页端概览
+ *   bind           —— { code }                    -> { ok, token, openid }
+ *   unbind         —— { token }                   -> { ok }  作废绑定
+ *   listTodos      —— { token }                   -> { ok, todos }
+ *   insertTodo     —— { token, todo }             -> { ok, id }
+ *   updateTodo     —— { token, id, patch }        -> { ok }
+ *   removeTodo     —— { token, id }               -> { ok }
+ *   stats          —— { token }                   -> { ok, counts }
+ *   oauthProviders —— {}                          -> { ok, providers, all } 仅返回已启用平台
+ *   oauthStart     —— { provider, redirectUri }   -> { ok, url, state, verifier }
+ *   oauthCallback  —— { provider, code, state, verifier, redirectUri } -> { ok, token, linked }
+ *   linkWechat     —— { token, code }             -> { ok, linked }  合并小程序 openid
+ *   accountInfo    —— { token }                   -> { ok, linked, provider, identities }
  *
  * 安全：
- *   - token 为 64 位随机 hex，且按 openid + token 双条件查库，防止口令被撞后越权；
+ *   - token 为 64 位随机 hex，按 token 查库且校验 revoked / 过期；
+ *   - OAuth 凭证只在云函数环境变量里，state 用 HMAC 签名绑定平台与回调地址（见 oauth.js）；
+ *   - identities / users / web_bindings 必须设为「仅管理端可读写」，否则 token 可被冒用；
  *   - 写操作只接受白名单字段，杜绝网页端写入任意字段污染数据；
- *   - bind 失败 5 次后按口令锁定 10 分钟（内存级，重启清零，够防扫描）。
+ *   - bind / linkWechat 失败 5 次后按口令锁定 10 分钟（内存级，重启清零，够防扫描）。
  */
 const cloud = require('wx-server-sdk')
 const crypto = require('crypto')
@@ -33,8 +43,9 @@ const _ = db.command
 
 process.env.TZ = 'Asia/Shanghai'
 
-const BUILD = '2026-11-13a'
+const BUILD = '2026-11-13b'
 const core = require('./reminder-core')
+const oauth = require('./oauth')
 const { HOLIDAYS_2027 } = require('./holidays-2027')
 
 /** 网页端可写入的待办字段白名单（与小程序 edit.js 保存的字段一致） */
@@ -148,6 +159,102 @@ async function authByToken(token) {
   } catch (e) {
     return null
   }
+}
+
+/* ── 统一用户身份（第三方登录）────────────────────────────────────────── */
+
+function needLinkResponse() {
+  return httpJson(409, {
+    ok: false,
+    code: 'NEED_LINK',
+    message: '当前账号尚未关联微信小程序，请输入小程序「我的 → 网页 / 电脑端同步」里的 8 位口令完成关联',
+  })
+}
+
+/**
+ * 把 web_bindings 记录解析成「可写 todos 的 openid」。
+ *  - 老口令绑定：记录里本来就有 openid，原样放行（零改动）；
+ *  - OAuth 绑定：openid 为空，按 kiwi_uid 从 users 表补出来并**回填到 row 对象**，
+ *    这样下面所有 action 里既有的 row.openid 写法完全不用改，pusher 相关字段形状不变；
+ *  - 仍未关联：返回 409 NEED_LINK，网页端弹出绑定口令输入框。
+ * @returns {null|object} null 表示放行；否则是应直接返回的 HTTP 响应
+ */
+async function requireLink(row) {
+  if (row.openid) return null
+  const uid = String(row.kiwi_uid || '')
+  if (!uid) return needLinkResponse()
+  try {
+    const res = await db.collection('users').where({ kiwi_uid: uid }).limit(1).get()
+    const user = res.data && res.data[0]
+    if (!user || !user.openid) return needLinkResponse()
+    row.openid = user.openid
+    return null
+  } catch (e) {
+    return needLinkResponse()
+  }
+}
+
+/** 按「平台 + 平台内唯一 ID」找已有身份，没有就建 users + identities */
+async function findOrCreateUser(who) {
+  const provider = String(who.provider || '')
+  const subject = String(who.subject || '')
+  if (!provider || !subject) throw new Error('平台未返回用户标识')
+  const hit = await db.collection('identities')
+    .where({ provider: provider, subject: subject })
+    .limit(1).get()
+  const exist = hit.data && hit.data[0]
+  if (exist && exist.kiwi_uid) {
+    try {
+      await db.collection('identities').doc(String(exist._id)).update({
+        data: { last_login_at: new Date().toISOString() },
+      })
+    } catch (e) { /* 更新登录时间失败不影响登录 */ }
+    return { kiwi_uid: String(exist.kiwi_uid), isNew: false }
+  }
+  const uid = crypto.randomBytes(16).toString('hex')
+  const nowIso = new Date().toISOString()
+  await db.collection('users').add({
+    data: {
+      kiwi_uid: uid,
+      openid: '',
+      primary_provider: provider,
+      created_at: nowIso,
+      updated_at: nowIso,
+    },
+  })
+  await db.collection('identities').add({
+    data: {
+      provider: provider,
+      subject: subject,
+      kiwi_uid: uid,
+      name: String(who.name || '').slice(0, 60),
+      email: String(who.email || '').slice(0, 120),
+      created_at: nowIso,
+      last_login_at: nowIso,
+    },
+  })
+  return { kiwi_uid: uid, isNew: true }
+}
+
+/** OAuth 登录成功后签发网页 token；openid 留空直到 linkWechat 完成关联 */
+async function issueOAuthToken(uid, provider) {
+  const token = randomHex(32)
+  const now = new Date()
+  await db.collection('web_bindings').add({
+    data: {
+      token: token,
+      code: '',
+      openid: '',
+      kiwi_uid: uid,
+      login: 'oauth',
+      provider: provider,
+      created_at: now.toISOString(),
+      expire_at: new Date(now.getTime() + BIND_TTL_MS).toISOString(),
+      last_used_at: null,
+      revoked: false,
+    },
+  })
+  return token
 }
 
 /**
@@ -286,6 +393,8 @@ async function actUnbind(event) {
 async function actListTodos(event) {
   const row = await authByToken(event.token)
   if (!row) return fail('token 无效或已过期，请重新绑定', 401)
+  const blocked = await requireLink(row)
+  if (blocked) return blocked
   let todos = []
   try {
     const res = await db.collection('todos')
@@ -303,6 +412,8 @@ async function actListTodos(event) {
 async function actInsertTodo(event) {
   const row = await authByToken(event.token)
   if (!row) return fail('token 无效或已过期，请重新绑定', 401)
+  const blocked = await requireLink(row)
+  if (blocked) return blocked
   const todo = sanitizeTodo(event.todo, true)
   if (!todo) return fail('标题或提醒时间不合法')
   const nowIso = new Date().toISOString()
@@ -343,6 +454,8 @@ async function actInsertTodo(event) {
 async function actUpdateTodo(event) {
   const row = await authByToken(event.token)
   if (!row) return fail('token 无效或已过期，请重新绑定', 401)
+  const blocked = await requireLink(row)
+  if (blocked) return blocked
   const id = String(event.id || '')
   if (!/^[0-9a-zA-Z_-]{1,64}$/.test(id)) return fail('id 不合法')
   const patch = sanitizeTodo(event.patch, false)
@@ -394,6 +507,8 @@ async function actUpdateTodo(event) {
 async function actRemoveTodo(event) {
   const row = await authByToken(event.token)
   if (!row) return fail('token 无效或已过期，请重新绑定', 401)
+  const blocked = await requireLink(row)
+  if (blocked) return blocked
   const id = String(event.id || '')
   if (!/^[0-9a-zA-Z_-]{1,64}$/.test(id)) return fail('id 不合法')
   try {
@@ -409,6 +524,8 @@ async function actRemoveTodo(event) {
 async function actStats(event) {
   const row = await authByToken(event.token)
   if (!row) return fail('token 无效或已过期，请重新绑定', 401)
+  const blocked = await requireLink(row)
+  if (blocked) return blocked
   try {
     const total = await db.collection('todos').where({ openid: row.openid }).count()
     const active = await db.collection('todos').where({ openid: row.openid, status: 'active' }).count()
@@ -420,6 +537,188 @@ async function actStats(event) {
   } catch (e) {
     return fail('统计失败：' + (e.errMsg || e.message), 500)
   }
+}
+
+/* ── 第三方账号登录 action ────────────────────────────────────────────── */
+
+/** 网页端据此渲染按钮：providers 只含已配好凭证的平台，不留假按钮；all 供「接入状态」清单展示 */
+async function actOauthProviders() {
+  const all = oauth.listProviders()
+  const enabled = all.filter(function (p) { return p.enabled })
+    .map(function (p) { return { id: p.id, name: p.name, pkce: p.pkce } })
+  return httpJson(200, { ok: true, providers: enabled, all: all, build: BUILD })
+}
+
+async function actOauthStart(event) {
+  try {
+    const r = oauth.start(event.provider, event.redirectUri)
+    return httpJson(200, {
+      ok: true, url: r.url, state: r.state,
+      verifier: r.verifier, provider: r.provider, build: BUILD,
+    })
+  } catch (e) {
+    return fail(e.message || '发起登录失败')
+  }
+}
+
+async function actOauthCallback(event) {
+  let who = null
+  try {
+    who = await oauth.callback(event)
+  } catch (e) {
+    return fail('登录失败：' + (e.message || '平台校验未通过'))
+  }
+  let user = null
+  try {
+    user = await findOrCreateUser(who)
+  } catch (e) {
+    return fail('账号建立失败：' + (e.errMsg || e.message), 500)
+  }
+  let token = ''
+  try {
+    token = await issueOAuthToken(user.kiwi_uid, who.provider)
+  } catch (e) {
+    return fail('签发会话失败：' + (e.errMsg || e.message), 500)
+  }
+  // 同一个 kiwi_uid 在别的设备上已经关联过微信时，本次登录直接可用
+  let linked = false
+  try {
+    const res = await db.collection('users')
+      .where({ kiwi_uid: user.kiwi_uid }).limit(1).get()
+    linked = !!(res.data && res.data[0] && res.data[0].openid)
+  } catch (e) { /* 查不到按未关联处理 */ }
+  return httpJson(200, {
+    ok: true,
+    token: token,
+    provider: who.provider,
+    name: who.name || '',
+    linked: linked,
+    needsLink: !linked,
+    kiwi_uid: user.kiwi_uid,
+    build: BUILD,
+  })
+}
+
+/** 当前会话的账号状态（网页端用来决定要不要显示「关联小程序」引导条） */
+async function actAccountInfo(event) {
+  const row = await authByToken(event.token)
+  if (!row) return fail('登录已失效，请重新登录', 401)
+  const uid = String(row.kiwi_uid || '')
+  let linked = !!row.openid
+  const identities = []
+  if (uid) {
+    try {
+      const res = await db.collection('identities').where({ kiwi_uid: uid }).limit(20).get()
+      for (let i = 0; i < (res.data || []).length; i++) {
+        identities.push({ provider: res.data[i].provider, name: res.data[i].name || '' })
+      }
+    } catch (e) { /* 展示用，失败不阻断 */ }
+    if (!linked) {
+      try {
+        const u = await db.collection('users').where({ kiwi_uid: uid }).limit(1).get()
+        linked = !!(u.data && u.data[0] && u.data[0].openid)
+      } catch (e) { /* 同上 */ }
+    }
+  }
+  return httpJson(200, {
+    ok: true,
+    linked: linked,
+    needsLink: !linked,
+    provider: row.provider || 'code',
+    identities: identities,
+    build: BUILD,
+  })
+}
+
+/**
+ * 用小程序生成的 8 位同步口令，把 openid 合并进当前第三方账号。
+ * 只读小程序那条 binding，不作废它 —— 不影响小程序端展示与其它网页设备。
+ * 若这个微信已属于另一个 kiwi_uid，则把当前第三方身份收敛过去（多账号 = 同一份数据）。
+ */
+async function actLinkWechat(event) {
+  const row = await authByToken(event.token)
+  if (!row) return fail('登录已失效，请重新登录', 401)
+  if (row.openid) return httpJson(200, { ok: true, linked: true, already: true, build: BUILD })
+
+  const code = String(event.code || '').trim().toUpperCase()
+  if (!/^[2-9A-HJKMNP-Z]{8}$/.test(code)) return fail('口令格式不正确')
+  if (bindLocked(code)) return fail('尝试次数过多，请 10 分钟后再试', 429)
+
+  let src = null
+  try {
+    const res = await db.collection('web_bindings')
+      .where({ code: code, revoked: _.neq(true) })
+      .limit(1).get()
+    src = res.data && res.data[0]
+  } catch (e) {
+    return fail('查询失败：' + (e.errMsg || e.message), 500)
+  }
+  if (!src || (src.expire_at && new Date(src.expire_at).getTime() < Date.now())) {
+    noteBindFail(code)
+    return fail('口令无效或已过期，请到小程序重新生成')
+  }
+  if (!src.openid) {
+    noteBindFail(code)
+    return fail('该口令不是小程序生成的同步口令')
+  }
+  clearBindFails(code)
+
+  const openid = String(src.openid)
+  let targetUid = String(row.kiwi_uid || '')
+  if (!targetUid) return fail('当前登录会话缺少用户标识，请重新登录', 401)
+  const nowIso = new Date().toISOString()
+
+  try {
+    const hit = await db.collection('identities')
+      .where({ provider: 'wechat_miniprogram', subject: openid })
+      .limit(1).get()
+    const exist = hit.data && hit.data[0]
+
+    if (exist && exist.kiwi_uid && exist.kiwi_uid !== targetUid) {
+      // 账号合并：把当前 uid 下的第三方身份改指向已有的 uid，旧 users 只做标记不删除
+      const oldUid = targetUid
+      targetUid = String(exist.kiwi_uid)
+      const ids = await db.collection('identities').where({ kiwi_uid: oldUid }).get()
+      for (let i = 0; i < (ids.data || []).length; i++) {
+        await db.collection('identities').doc(String(ids.data[i]._id)).update({
+          data: { kiwi_uid: targetUid, merged_at: nowIso },
+        })
+      }
+      const oldUsers = await db.collection('users').where({ kiwi_uid: oldUid }).get()
+      for (let i = 0; i < (oldUsers.data || []).length; i++) {
+        await db.collection('users').doc(String(oldUsers.data[i]._id)).update({
+          data: { merged_into: targetUid, merged_at: nowIso },
+        })
+      }
+      await db.collection('web_bindings').doc(String(row._id)).update({
+        data: { kiwi_uid: targetUid },
+      })
+    } else if (!exist) {
+      await db.collection('identities').add({
+        data: {
+          provider: 'wechat_miniprogram',
+          subject: openid,
+          kiwi_uid: targetUid,
+          created_at: nowIso,
+          last_login_at: nowIso,
+        },
+      })
+    }
+
+    const users = await db.collection('users').where({ kiwi_uid: targetUid }).get()
+    for (let i = 0; i < (users.data || []).length; i++) {
+      await db.collection('users').doc(String(users.data[i]._id)).update({
+        data: { openid: openid, linked_at: nowIso, updated_at: nowIso },
+      })
+    }
+    // 回填后 requireLink 会直接放行，后续 CRUD 全部写真实的 openid
+    await db.collection('web_bindings').doc(String(row._id)).update({
+      data: { openid: openid },
+    })
+  } catch (e) {
+    return fail('关联失败：' + (e.errMsg || e.message), 500)
+  }
+  return httpJson(200, { ok: true, linked: true, openid: openid, build: BUILD })
 }
 
 /** 生成口令：小程序端通过 wx.cloud.callFunction 调用（走微信身份，无需 HTTP） */
@@ -488,6 +787,13 @@ exports.main = async (event) => {
   if (action === 'updateTodo') return actUpdateTodo(event)
   if (action === 'removeTodo') return actRemoveTodo(event)
   if (action === 'stats') return actStats(event)
+
+  // 第三方账号登录（凭证未配置的平台在 oauthProviders 里自动隐藏）
+  if (action === 'oauthProviders') return actOauthProviders(event)
+  if (action === 'oauthStart') return actOauthStart(event)
+  if (action === 'oauthCallback') return actOauthCallback(event)
+  if (action === 'linkWechat') return actLinkWechat(event)
+  if (action === 'accountInfo') return actAccountInfo(event)
 
   return fail('未知操作：' + action + '｜webapi 版本 ' + BUILD)
 }

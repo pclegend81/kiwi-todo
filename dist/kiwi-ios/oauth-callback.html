@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KIWI待办 · 登录中</title>
+<meta name="robots" content="noindex,nofollow">
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
+         background:#f4f7fb; color:#243247; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",
+         "PingFang SC","Microsoft YaHei",sans-serif; padding:20px; }
+  .card { width:100%; max-width:420px; background:#fff; border:1px solid #e6ecf5;
+          border-radius:16px; padding:28px; box-shadow:0 12px 40px rgba(20,40,80,.08); text-align:center; }
+  .logo { width:48px; height:48px; margin:0 auto 14px; border-radius:12px; background:#007aff;
+          color:#fff; font-size:26px; font-weight:800; line-height:48px; }
+  h1 { font-size:18px; margin:0 0 8px; }
+  p { font-size:13px; line-height:1.7; margin:0; color:#64748b; word-break:break-word; }
+  .btn { display:inline-block; margin-top:20px; padding:10px 22px; border-radius:10px;
+         background:#007aff; color:#fff; font-size:14px; font-weight:600; text-decoration:none; }
+  .err { color:#b91c1c; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">K</div>
+  <h1 id="title">正在完成登录…</h1>
+  <p id="msg">正在与云端校验授权结果，请不要关闭页面。</p>
+  <a id="back" class="btn" href="index.html" hidden>返回登录</a>
+</div>
+<script>
+;(function () {
+  'use strict'
+  var $ = function (id) { return document.getElementById(id) }
+  var API_KEY = 'kiwi_web_api'
+  var TOKEN_KEY = 'kiwi_web_token'
+  var SS_KEY = 'kiwi_oauth'
+
+  function lsGet(k) { try { return localStorage.getItem(k) || '' } catch (e) { return '' } }
+  function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
+  function ssGet(k) { try { return sessionStorage.getItem(k) || '' } catch (e) { return '' } }
+  function ssDel(k) { try { sessionStorage.removeItem(k) } catch (e) {} }
+
+  function showError(msg) {
+    $('title').textContent = '登录未完成'
+    $('title').className = 'err'
+    $('msg').textContent = msg
+    $('back').hidden = false
+  }
+
+  function callApi(url, action, payload) {
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.assign({ action: action }, payload || {})),
+    }).then(function (res) {
+      return res.text().then(function (text) {
+        var data
+        try { data = JSON.parse(text) } catch (e) { throw new Error('接口返回异常（HTTP ' + res.status + '）') }
+        // 未开启集成响应时，整个 {statusCode, headers, body} 会被当 JSON 返回
+        if (data && typeof data.statusCode === 'number' && typeof data.body === 'string') {
+          try { data = JSON.parse(data.body) } catch (e) {}
+        }
+        if (!data || !data.ok) throw new Error((data && data.message) || '云端校验未通过')
+        return data
+      })
+    })
+  }
+
+  function run() {
+    var params = new URLSearchParams(location.search)
+    var apiUrl = lsGet(API_KEY)
+    var saved
+    try { saved = JSON.parse(ssGet(SS_KEY) || 'null') } catch (e) { saved = null }
+
+    if (params.get('error')) {
+      showError('授权被取消或平台返回错误：' + params.get('error'))
+      return
+    }
+    if (!apiUrl) {
+      showError('尚未配置接口地址。请先回到登录页填写 webapi 地址，再重新发起登录。')
+      return
+    }
+    if (!saved || !saved.state || !saved.provider) {
+      showError('登录状态已丢失（可能换了浏览器或无痕模式），请重新发起登录。')
+      return
+    }
+    if (!params.get('code')) {
+      showError('平台没有返回授权码，请重新发起登录。')
+      return
+    }
+    if (params.get('state') !== saved.state) {
+      showError('登录状态校验失败，为防止账号被冒用已中止，请重新发起登录。')
+      return
+    }
+    if (!saved.at || Date.now() - saved.at > 10 * 60000) {
+      showError('登录已超时（10 分钟），请重新发起登录。')
+      return
+    }
+
+    $('msg').textContent = '授权成功，正在建立 KIWI 账号…'
+    callApi(apiUrl, 'oauthCallback', {
+      provider: saved.provider,
+      code: params.get('code'),
+      state: saved.state,
+      verifier: saved.verifier || '',
+      redirectUri: saved.redirectUri,
+    }).then(function (res) {
+      lsSet(TOKEN_KEY, res.token)
+      ssDel(SS_KEY)
+      $('title').textContent = res.linked ? '登录成功' : '登录成功，还差一步'
+      $('msg').textContent = res.linked
+        ? '正在打开你的待办…'
+        : '回到页面后输入小程序里的 8 位同步口令，即可与微信数据合并。'
+      location.replace('index.html?login=oauth')
+    }).catch(function (e) {
+      showError(e.message || '云端校验失败，请重新发起登录。')
+    })
+  }
+
+  run()
+})()
+</script>
+</body>
+</html>

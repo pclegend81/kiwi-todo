@@ -41,21 +41,25 @@
       body: JSON.stringify(body),
     }).then(function (res) {
       return res.text().then(function (text) {
+        var status = res.status
         var data
         try { data = JSON.parse(text) } catch (e) {
-          throw new Error('接口返回异常（HTTP ' + res.status + '）：' + text.slice(0, 120))
+          throw new Error('接口返回异常（HTTP ' + status + '）：' + text.slice(0, 120))
         }
-        // 未开启集成响应时，整个 {statusCode, headers, body} 会被当 JSON 返回
+        // 未开启集成响应时，整个 {statusCode, headers, body} 会被当 JSON 返回；
+        // 此时 HTTP 层恒为 200，需要把内层 statusCode 取出来，401/409 才判得准。
         if (data && typeof data.statusCode === 'number' && typeof data.body === 'string') {
+          status = data.statusCode
           try { data = JSON.parse(data.body) } catch (e) { /* 保持原样，下面会报错提示 */ }
         }
         if (typeof data === 'string') {
           try { data = JSON.parse(data) } catch (e) {}
         }
         if (!data || !data.ok) {
-          var msg = (data && data.message) || ('请求失败（HTTP ' + res.status + '）')
+          var msg = (data && data.message) || ('请求失败（HTTP ' + status + '）')
           var err = new Error(msg)
-          err.status = res.status
+          err.status = status
+          err.code = (data && data.code) || ''
           throw err
         }
         return data
@@ -103,6 +107,12 @@
         busy: false,
         refreshing: false,
         toast: '',
+        // 第三方登录：providers 只含云端已配好凭证的平台（未配置的不渲染按钮）
+        providers: [],
+        allProviders: [],
+        showProviderStatus: false,
+        account: null,      // { linked, needsLink, provider, identities }
+        linkCode: '',
         todos: [],
         filter: 'active',
         query: '',           // 桌面工具栏搜索；手机端不显示输入框，始终为空
@@ -113,6 +123,10 @@
     },
 
     computed: {
+      /** OAuth 回调页与 index.html 同目录，拼成绝对地址给云函数签进 state */
+      oauthRedirect: function () {
+        try { return new URL('oauth-callback.html', window.location.href).href } catch (e) { return '' }
+      },
       visibleTodos: function () {
         var self = this
         var q = String(this.query || '').trim().toLowerCase()
@@ -158,9 +172,18 @@
       },
     },
 
+    watch: {
+      // 用户第一次填接口地址后，立刻拉一次已接入平台列表
+      apiUrl: function () { if (!this.bound) this.loadProviders() },
+    },
+
     mounted: function () {
       var self = this
-      if (this.bound) this.refresh()
+      if (this.bound) {
+        this.loadAccount().then(function () { return self.refresh(true) })
+      } else {
+        this.loadProviders()
+      }
       this.pollTimer = setInterval(function () {
         if (self.bound && !document.hidden) self.refresh(true)
       }, POLL_MS)
@@ -226,10 +249,9 @@
       api: function (action, payload) {
         var self = this
         return callApi(this.apiUrl, action, payload).catch(function (e) {
-          // token 失效：清掉本地会话，回到口令绑定页
-          if (e.status === 401 || /token|口令|过期|无效/i.test(e.message)) {
-            self.doUnbindLocal()
-          }
+          // 只按 401 判定会话失效。409 NEED_LINK 是「尚未关联小程序」的业务引导，
+          // 绝不能清本地 token，否则用户会被反复踢回登录页。
+          if (e.status === 401) self.doUnbindLocal()
           throw e
         })
       },
@@ -239,6 +261,7 @@
         this.token = ''
         this.bound = false
         this.todos = []
+        this.account = null
       },
 
       bind: function () {
@@ -259,10 +282,88 @@
             self.bound = true
             self.codeInput = ''
             self.showToast('绑定成功，正在同步…')
-            return self.refresh()
+            return self.loadAccount().then(function () { return self.refresh() })
           })
           .catch(function (e) { self.showToast(e.message || '绑定失败') })
           .then(function () { self.busy = false })
+      },
+
+      /** 拉云端「已配置凭证」的平台列表；没配凭证的平台根本不会返回，不留假按钮 */
+      loadProviders: function () {
+        var self = this
+        if (!this.apiUrl) return Promise.resolve()
+        return callApi(this.apiUrl, 'oauthProviders', {})
+          .then(function (res) {
+            self.providers = res.providers || []
+            self.allProviders = res.all || []
+          })
+          .catch(function () { self.providers = []; self.allProviders = [] })
+      },
+
+      loadAccount: function () {
+        var self = this
+        if (!this.token) return Promise.resolve()
+        return this.api('accountInfo', { token: this.token })
+          .then(function (res) { self.account = res })
+          .catch(function () { self.account = null })
+      },
+
+      /** 跳到平台授权页；state / PKCE verifier 暂存 sessionStorage，回调页原样带回 */
+      oauthLogin: function (p) {
+        var self = this
+        if (!this.apiUrl) {
+          this.showApi = true
+          this.showToast('请先填写接口地址')
+          return
+        }
+        var redirect = this.oauthRedirect
+        if (!/^https?:/.test(redirect) || redirect.indexOf('https://') !== 0) {
+          this.showToast('第三方登录需部署到 HTTPS 静态托管后使用')
+          return
+        }
+        lsSet(LS_API, this.apiUrl)
+        this.busy = true
+        callApi(this.apiUrl, 'oauthStart', { provider: p.id, redirectUri: redirect })
+          .then(function (res) {
+            try {
+              sessionStorage.setItem('kiwi_oauth', JSON.stringify({
+                state: res.state,
+                verifier: res.verifier || '',
+                provider: res.provider,
+                redirectUri: redirect,
+                at: Date.now(),
+              }))
+            } catch (e) { /* 无痕模式写不进也不影响跳转，回调页会提示重新登录 */ }
+            window.location.href = res.url
+          })
+          .catch(function (e) {
+            self.showToast(e.message || '发起登录失败')
+            self.busy = false
+          })
+      },
+
+      /** 第三方账号首次登录需关联小程序，才能拿到 openid 并读写同一份 todos */
+      linkWechat: function () {
+        var self = this
+        var code = String(this.linkCode || '').trim().toUpperCase()
+        if (!code) return
+        this.busy = true
+        this.api('linkWechat', { token: this.token, code: code })
+          .then(function () {
+            self.linkCode = ''
+            self.showToast('已关联，正在同步…')
+            return self.loadAccount().then(function () { return self.refresh(true) })
+          })
+          .catch(function (e) { self.showToast(e.message || '关联失败') })
+          .then(function () { self.busy = false })
+      },
+
+      providerMark: function (id) {
+        return { github: 'GH', google: 'G', apple: 'A', x: 'X', wechat: '微' }[id] || '?'
+      },
+
+      providerName: function (id) {
+        return { github: 'GitHub', google: 'Google', apple: 'Apple', x: 'X', wechat: '微信', code: '同步口令' }[id] || id
       },
 
       unbind: function () {
@@ -281,6 +382,14 @@
             if (!silent) self.showToast('已同步 ' + self.todos.length + ' 条')
           })
           .catch(function (e) {
+            if (e.code === 'NEED_LINK') {
+              self.account = {
+                linked: false, needsLink: true,
+                provider: (self.account && self.account.provider) || 'oauth',
+              }
+              if (!silent) self.showToast('请先关联微信小程序')
+              return
+            }
             if (!silent) self.showToast(e.message || '同步失败')
           })
           .then(function () { self.refreshing = false })

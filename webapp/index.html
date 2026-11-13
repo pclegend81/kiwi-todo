@@ -109,6 +109,27 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
 /* 桌面/移动布局开关：基础态是手机，只有 >=980px 才切换成桌面工作台 */
 .only-desktop { display: none !important; }
 .side-col { display: none; }
+/* 第三方账号登录 */
+.oauth-sep { display:flex; align-items:center; gap:10px; margin:18px 0 12px; color:#94a3b8; font-size:12px; }
+.oauth-sep::before, .oauth-sep::after { content:''; flex:1; height:1px; background:#e2e8f0; }
+.oauth-btns { display:grid; grid-template-columns:repeat(auto-fit,minmax(92px,1fr)); gap:8px; }
+.oauth-btn { display:flex; align-items:center; justify-content:center; gap:6px; padding:10px 6px;
+             border:1px solid #dbe3ee; border-radius:10px; background:#fff; color:#243247;
+             font-size:13px; font-weight:600; cursor:pointer; white-space:nowrap; transition:.15s; }
+.oauth-btn:hover { border-color:#007aff; box-shadow:0 2px 8px rgba(0,122,255,.12); }
+.oauth-btn:disabled { opacity:.5; cursor:default; }
+.oauth-mark { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px;
+              border-radius:6px; background:#f1f5f9; font-size:11px; font-weight:800; }
+.provider-status { margin-top:8px; padding:10px 12px; background:#f8fafc; border:1px solid #edf1f7;
+                   border-radius:10px; font-size:12px; }
+.provider-row { display:flex; justify-content:space-between; gap:12px; padding:3px 0; }
+.provider-row .ok { color:#16a34a; flex-shrink:0; }
+.provider-row .off { color:#94a3b8; text-align:right; word-break:break-all; }
+.link-banner { border:1px solid #bfdbfe; background:#f5f9ff; }
+.link-form { display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; }
+.link-form input { flex:1; min-width:160px; letter-spacing:3px; text-align:center; font-weight:700; }
+.link-form .btn { flex:0 0 auto; width:auto; padding:11px 24px; }
+
 .login-brand { display: none; }
 .toolbar-spacer { flex: 1; }
 .header-actions { display: flex; align-items: center; gap: 18px; }
@@ -299,6 +320,34 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
           <div class="small muted" style="margin-top:10px">
             口令绑定后本设备 30 天内免输入；可在小程序里随时「作废口令」。
           </div>
+
+          <div v-if="providers.length" class="oauth-sep"><span>或使用第三方账号登录</span></div>
+          <div v-if="providers.length" class="oauth-btns">
+            <button v-for="p in providers" :key="p.id" class="oauth-btn"
+                    :disabled="busy" @click="oauthLogin(p)">
+              <span class="oauth-mark">{{ providerMark(p.id) }}</span>{{ p.name }}
+            </button>
+          </div>
+          <div v-if="providers.length" class="small muted" style="margin-top:8px">
+            首次登录后需再输入一次小程序同步口令，即可与微信里的数据合并为同一份待办。
+          </div>
+          <div style="margin-top:12px">
+            <span class="link small" @click="showProviderStatus=!showProviderStatus">
+              账号接入状态（共 {{ allProviders.length }} 个平台）
+            </span>
+            <div v-if="showProviderStatus" class="provider-status">
+              <div v-for="p in allProviders" :key="p.id" class="provider-row">
+                <span>{{ p.name }}</span>
+                <span :class="p.enabled ? 'ok' : 'off'">
+                  {{ p.enabled ? '已接入' : '未配置：' + p.missing.join('、') }}
+                </span>
+              </div>
+              <div class="small muted" style="margin-top:6px">
+                未配置的平台不会显示登录按钮；在云函数环境变量里补齐凭证后自动出现。
+              </div>
+            </div>
+          </div>
+
           <div style="margin-top:14px">
             <span class="link small" @click="showApi=!showApi">接口地址设置（部署时填一次）</span>
             <div v-if="showApi || !apiUrl" style="margin-top:8px">
@@ -326,6 +375,20 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
       <div class="header-actions">
         <button class="btn only-desktop" @click="openNew">＋ 新建待办 <kbd>N</kbd></button>
         <span class="link small" @click="unbind">退出</span>
+      </div>
+    </div>
+
+    <!-- 第三方账号已登录但还没关联小程序：显式引导，避免「登录了却看不到数据」 -->
+    <div v-if="account && account.needsLink" class="card link-banner">
+      <div class="title">关联微信小程序，打通全部待办</div>
+      <div class="small muted" style="margin-top:6px">
+        当前使用 {{ providerName(account.provider) }} 登录。输入小程序「我的 → 网页 / 电脑端同步」
+        里的 8 位口令，这个账号就能读写同一份云端数据，并继续由微信订阅消息准时提醒。
+      </div>
+      <div class="link-form">
+        <input v-model.trim="linkCode" maxlength="8" placeholder="8 位同步口令"
+               style="font-size:18px" @keyup.enter="linkWechat">
+        <button class="btn" :disabled="!linkCode || busy" @click="linkWechat">关联并同步</button>
       </div>
     </div>
 

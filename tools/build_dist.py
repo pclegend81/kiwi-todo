@@ -116,10 +116,22 @@ echo Browser opened. Close the "KIWI-Todo-Server" window to stop the server.
 pause >nul
 '''
 
+OAUTH_NOTE = '''
+【第三方账号登录（可选）】
+  除 8 位同步口令外，网页端还支持 Google / Apple / GitHub / X /
+  微信网页扫码登录，三端共用同一套逻辑。
+  按钮由云端控制：只有在 webapi 云函数环境变量里配好对应平台凭证才会出现，
+  未配置的平台不会显示假按钮（可展开「账号接入状态」查看还缺哪些变量）。
+  首次用第三方账号登录后，需再输入一次小程序里的 8 位同步口令完成账号合并，
+  之后与小程序读写同一份待办，并继续由微信订阅消息准时提醒。
+  完整配置清单见 WEBAPP_DEPLOY.md 的 I 节。
+'''
+
 # 临时预览 / 调试文件绝不进分发包
 IGNORE = shutil.ignore_patterns('_vue.dev.js', '_preview*', '_probe*', '*.pyc')
 
 for name, note in NOTES.items():
+    note = note + OAUTH_NOTE
     target = os.path.join(DIST, name)
     if os.path.isdir(target):
         shutil.rmtree(target)
