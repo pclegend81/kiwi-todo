@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#007aff">
-<title>KIWI待办 · 网页版</title>
+<title>KIWI待办 · 桌面版 / 网页版</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -13,13 +13,15 @@
 <style>
 :root {
   --bg: #f2f3f7; --card: #ffffff; --text: #1c1e21; --muted: #8a8f99;
-  --accent: #007aff; --danger: #e64340; --ok: #09bb07; --border: #e5e7eb;
-  --radius: 14px;
+  --accent: #007aff; --accent-soft: #eaf3ff; --danger: #e64340; --ok: #09bb07;
+  --border: #e5e7eb; --radius: 14px;
+  --shadow: 0 1px 3px rgba(0,0,0,.06);
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 .container { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
 .page-header { padding: 20px 4px 12px; }
@@ -27,7 +29,7 @@ body {
 .page-subtitle { color: var(--muted); font-size: 13px; margin-top: 2px; }
 .card {
   background: var(--card); border-radius: var(--radius); padding: 16px;
-  margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  margin-bottom: 12px; box-shadow: var(--shadow);
 }
 .row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -82,7 +84,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
   background: rgba(30,30,32,.92); color: #fff; padding: 10px 20px; border-radius: 10px;
   font-size: 14px; z-index: 99; max-width: 86vw; text-align: center; pointer-events: none;
 }
-.tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
 .modal-mask {
   position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50;
   display: flex; align-items: center; justify-content: center; padding: 16px;
@@ -103,149 +105,385 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
 }
 .tgl input:checked + .knob { background: var(--ok); }
 .tgl input:checked + .knob::after { left: 22px; }
-@media (min-width: 700px) { .container { max-width: 720px; } body { font-size: 16px; } }
+
+/* 桌面/移动布局开关：基础态是手机，只有 >=980px 才切换成桌面工作台 */
+.only-desktop { display: none !important; }
+.side-col { display: none; }
+.login-brand { display: none; }
+.toolbar-spacer { flex: 1; }
+.header-actions { display: flex; align-items: center; gap: 18px; }
+@media (min-width: 700px) and (max-width: 979px) {
+  .container { max-width: 720px; }
+  body { font-size: 16px; }
+}
+
+/* ============ 桌面工作台（PC） ============ */
+@media (min-width: 980px) {
+  body { font-size: 14px; }
+  .container { max-width: 1440px; margin: 0 auto; padding: 0 32px 40px; }
+  .only-mobile { display: none !important; }
+  .only-desktop { display: block !important; }
+  .only-desktop.inline { display: inline !important; }
+  .only-desktop.flex { display: flex !important; }
+
+  /* 顶部条 */
+  .page-header {
+    padding: 22px 0 18px; margin-bottom: 22px;
+    border-bottom: 1px solid var(--border); align-items: center;
+  }
+  .page-title { font-size: 22px; letter-spacing: -.3px; }
+  .page-subtitle { font-size: 13px; margin-top: 4px; }
+  .header-actions .btn {
+    display: inline-flex; align-items: center; gap: 10px; width: auto;
+    padding: 9px 18px; font-size: 14px; border-radius: 9px;
+    box-shadow: 0 2px 8px rgba(0,122,255,.22);
+  }
+  .header-actions .btn:hover { background: #0069df; }
+  .header-actions .link { font-size: 13px; }
+  kbd {
+    font-family: Menlo, Consolas, monospace; font-size: 11px; line-height: 1;
+    padding: 3px 5px; border-radius: 4px; background: rgba(255,255,255,.22);
+    border: 1px solid rgba(255,255,255,.35);
+  }
+
+  /* 两栏骨架：左侧固定导航，右侧内容 */
+  .layout {
+    display: grid; grid-template-columns: 232px minmax(0, 1fr);
+    gap: 28px; align-items: start;
+  }
+  .side-col { display: block; position: sticky; top: 24px; }
+  .side-group { margin-bottom: 22px; }
+  .side-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.2px; color: #9aa0aa;
+    text-transform: uppercase; padding: 0 10px; margin-bottom: 8px;
+  }
+  .nav-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border-radius: 9px; cursor: pointer; user-select: none;
+    color: #41464f; font-size: 14px; font-weight: 500; margin-bottom: 2px;
+    border-left: 3px solid transparent; transition: background .15s;
+  }
+  .nav-item:hover { background: #e9edf3; }
+  .nav-item.active { background: var(--accent-soft); color: var(--accent); border-left-color: var(--accent); font-weight: 700; }
+  .nav-count {
+    min-width: 22px; text-align: center; font-size: 12px; font-weight: 700;
+    padding: 1px 7px; border-radius: 10px; background: #eceff4; color: #6b7280;
+  }
+  .nav-item.active .nav-count { background: #fff; color: var(--accent); }
+  .side-panel {
+    background: #fff; border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px; box-shadow: var(--shadow); margin-bottom: 14px;
+  }
+  .side-panel .sp-label { font-size: 11px; color: #9aa0aa; font-weight: 700; letter-spacing: .5px; }
+  .side-panel .sp-value { font-size: 15px; font-weight: 700; color: var(--accent); margin-top: 4px; line-height: 1.4; }
+  .side-note { font-size: 12px; color: #9aa0aa; line-height: 1.8; padding: 0 10px; }
+  .side-note kbd { background: #e9edf3; border-color: #dde2e9; color: #6b7280; }
+
+  /* 右侧工具条 */
+  .tabs {
+    flex-wrap: nowrap; gap: 10px; margin-bottom: 16px;
+    background: #fff; border: 1px solid var(--border); border-radius: 11px;
+    padding: 9px 12px; box-shadow: var(--shadow);
+  }
+  .tabs .chip { padding: 5px 14px; }
+  .tabs .chip:hover { background: #dfe6ef; }
+  .tabs .chip.on:hover { background: #0069df; }
+  .search-input { width: 280px; flex-shrink: 1; padding: 7px 12px; font-size: 13px; border-radius: 8px; }
+  .toolbar-stat { font-size: 12px; color: var(--muted); white-space: nowrap; margin-left: 4px; }
+  .toolbar-spacer { flex: 1; }
+
+  /* 多列卡片网格：宽屏不再是一条窄列 */
+  .todo-list {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(316px, 1fr));
+    gap: 16px; align-items: stretch;
+  }
+  .card { padding: 18px; border: 1px solid #edf0f4; }
+  .todo-card {
+    margin-bottom: 0; display: flex; flex-direction: column; min-height: 186px;
+    transition: box-shadow .16s, transform .16s, border-color .16s;
+  }
+  .todo-card:hover {
+    box-shadow: 0 6px 20px rgba(20,40,80,.10); transform: translateY(-2px);
+    border-color: #d7e3f5;
+  }
+  .todo-title { font-size: 15px; }
+  .todo-note { font-size: 12.5px; }
+  .todo-next { font-size: 13px; }
+  .todo-divider { margin-top: auto; margin-bottom: 10px; }
+  .todo-actions { gap: 6px; }
+  .todo-actions .chip { padding: 4px 12px; font-size: 12px; transition: background .15s, color .15s; }
+  .todo-actions .chip:hover { background: #dbe6f7; color: var(--accent); }
+  .empty { padding: 64px 0; font-size: 14px; }
+
+  /* 表单弹层：加宽 + 两列字段 */
+  .modal-mask { backdrop-filter: blur(2px); }
+  .modal {
+    max-width: 720px; max-height: 88vh; padding: 24px 26px;
+    border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,.22);
+  }
+  .modal > .title { font-size: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 18px; }
+  .form-grid > .field-full { grid-column: 1 / -1; }
+  .form-grid label { margin-top: 12px; }
+  .form-grid textarea { resize: vertical; }
+  .modal-actions { justify-content: flex-end; margin-top: 22px; }
+  .modal-actions .btn { flex: 0 0 120px; width: auto; padding: 10px 0; }
+  .modal-hint { font-size: 12px; color: #9aa0aa; margin-right: auto; align-self: center; }
+
+  /* 登录页：左品牌 + 右口令卡 */
+  .login-wrap {
+    display: grid; grid-template-columns: 1fr 440px; gap: 64px;
+    max-width: 1000px; margin: 9vh auto 0; align-items: center;
+  }
+  .login-brand { display: block !important; }
+  .login-wrap > div > .page-header { display: none; }
+  .brand-logo {
+    width: 56px; height: 56px; border-radius: 15px; background: var(--accent);
+    color: #fff; font-size: 30px; font-weight: 800; display: flex;
+    align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(0,122,255,.3);
+  }
+  .brand-title { font-size: 34px; font-weight: 800; letter-spacing: -1px; margin-top: 22px; }
+  .brand-sub { color: var(--muted); font-size: 15px; margin-top: 6px; }
+  .brand-features { list-style: none; margin-top: 30px; }
+  .brand-features li {
+    display: flex; gap: 10px; align-items: flex-start; font-size: 14px;
+    color: #4b515b; margin-bottom: 14px; line-height: 1.6;
+  }
+  .brand-features .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--accent);
+    flex-shrink: 0; margin-top: 8px;
+  }
+  .login-card { padding: 26px; box-shadow: 0 12px 40px rgba(20,40,80,.10); }
+  .login-card .title { font-size: 18px; }
+
+  .toast { bottom: 28px; font-size: 13px; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #ccd3dd; border-radius: 6px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+}
 </style>
 </head>
 <body>
 <div class="container" id="app">
-  <!-- 未绑定：口令登录页 -->
+  <!-- 未绑定：口令登录页（桌面为左品牌 + 右卡片） -->
   <template v-if="!bound">
-    <div class="page-header">
-      <div class="page-title">KIWI待办</div>
-      <div class="page-subtitle">网页版 · 与微信小程序互相同步</div>
-    </div>
-    <div class="card">
-      <div class="title">输入同步口令</div>
-      <div class="small muted" style="margin-top:6px">
-        打开微信小程序 KIWI待办 → 「我的」→ 「网页 / 电脑端同步」→ 生成同步口令，把 8 位口令填到这里。
+    <div class="login-wrap">
+      <div class="login-brand">
+        <div class="brand-logo">K</div>
+        <div class="brand-title">KIWI待办</div>
+        <div class="brand-sub">网页 / 电脑端 · 与微信小程序实时同步</div>
+        <ul class="brand-features">
+          <li><span class="dot"></span><span>同一份云端数据：电脑、手机、小程序三端互相同步</span></li>
+          <li><span class="dot"></span><span>13 种重复规则与中国大陆法定节假日智能顺延 / 跳过</span></li>
+          <li><span class="dot"></span><span>网页端创建的待办，照常由微信订阅消息推送到手机</span></li>
+        </ul>
       </div>
-      <label>同步口令（8 位，不含 0/O/1/I/L）</label>
-      <input v-model.trim="codeInput" maxlength="8" placeholder="如 AB23CD45"
-             style="font-size:22px;letter-spacing:6px;text-align:center;font-weight:700"
-             @keyup.enter="bind">
-      <button class="btn" style="margin-top:16px" :disabled="!codeInput || busy" @click="bind">
-        {{ busy ? '绑定中…' : '绑定并同步' }}
-      </button>
-      <div class="small muted" style="margin-top:10px">
-        口令绑定后本设备 30 天内免输入；可在小程序里随时「作废口令」。
-      </div>
-      <div style="margin-top:14px">
-        <span class="link small" @click="showApi=!showApi">接口地址设置（部署时填一次）</span>
-        <div v-if="showApi || !apiUrl" style="margin-top:8px">
-          <input v-model.trim="apiUrl" placeholder="https://xxx.service.tcloudbase.com/webapi">
+      <div>
+        <div class="page-header">
+          <div class="page-title">KIWI待办</div>
+          <div class="page-subtitle">网页版 · 与微信小程序互相同步</div>
+        </div>
+        <div class="card login-card">
+          <div class="title">输入同步口令</div>
           <div class="small muted" style="margin-top:6px">
-            填云开发「HTTP 访问服务」里 webapi 的完整地址。首次部署时必填，之后本设备自动记住。
+            打开微信小程序 KIWI待办 → 「我的」→ 「网页 / 电脑端同步」→ 生成同步口令，把 8 位口令填到这里。
+          </div>
+          <label>同步口令（8 位，不含 0/O/1/I/L）</label>
+          <input v-model.trim="codeInput" maxlength="8" placeholder="如 AB23CD45"
+                 style="font-size:22px;letter-spacing:6px;text-align:center;font-weight:700"
+                 @keyup.enter="bind">
+          <button class="btn" style="margin-top:16px" :disabled="!codeInput || busy" @click="bind">
+            {{ busy ? '绑定中…' : '绑定并同步' }}
+          </button>
+          <div class="small muted" style="margin-top:10px">
+            口令绑定后本设备 30 天内免输入；可在小程序里随时「作废口令」。
+          </div>
+          <div style="margin-top:14px">
+            <span class="link small" @click="showApi=!showApi">接口地址设置（部署时填一次）</span>
+            <div v-if="showApi || !apiUrl" style="margin-top:8px">
+              <input v-model.trim="apiUrl" placeholder="https://xxx.service.tcloudbase.com/webapi">
+              <div class="small muted" style="margin-top:6px">
+                填云开发「HTTP 访问服务」里 webapi 的完整地址。首次部署时必填，之后本设备自动记住。
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
   </template>
 
-  <!-- 已绑定：主列表 -->
+  <!-- 已绑定：主界面 -->
   <template v-else>
     <div class="page-header row-between">
       <div>
         <div class="page-title">KIWI待办</div>
-        <div class="page-subtitle">已同步 · {{ todos.length }} 条</div>
+        <div class="page-subtitle">
+          已同步 · {{ todos.length }} 条
+          <span class="only-desktop inline"> · 上次同步 {{ lastSyncText || '—' }}</span>
+        </div>
       </div>
-      <span class="link small" @click="unbind">退出</span>
-    </div>
-
-    <div class="card" style="padding:12px 16px">
-      <button class="btn" @click="openNew">＋ 新建待办</button>
-    </div>
-
-    <div class="tabs">
-      <span class="chip" :class="{on: filter==='active'}" @click="filter='active'">进行中</span>
-      <span class="chip" :class="{on: filter==='done'}" @click="filter='done'">已完成</span>
-      <span class="chip" :class="{on: filter==='all'}" @click="filter='all'">全部</span>
-      <span style="flex:1"></span>
-      <span class="chip" @click="refresh" v-if="!refreshing">刷新</span>
-      <span class="chip on" v-else>刷新中…</span>
-    </div>
-
-    <div class="card todo-card" v-for="t in visibleTodos" :key="t.id">
-      <div class="row-between">
-        <span class="todo-title" :class="{'chip-done': t.status==='done'}">{{ t.title || '（无标题）' }}</span>
-        <span class="tag" :class="'tag-'+t.priority">{{ priorityText(t.priority) }}优先级</span>
-      </div>
-      <div class="todo-note" v-if="t.note">{{ t.note }}</div>
-      <div class="todo-meta">
-        <span class="tag">{{ repeatText(t) }}</span>
-        <span class="tag" v-if="t.skip_holiday">跳过节假日</span>
-        <span class="tag tag-warn" v-if="t.status==='done' && t.manual_done">手工完成</span>
-        <span class="tag tag-done" v-if="t.created_from==='web'">来自网页</span>
-      </div>
-      <div class="todo-next" v-if="t.status==='active' && nextText(t)">下次提醒：{{ nextText(t) }}</div>
-      <div class="todo-next muted" v-if="t.status==='done'">已完成{{ t.done_at ? ' · ' + fmtTime(t.done_at) : '' }}</div>
-      <div class="todo-divider" v-if="t.status==='active'"></div>
-      <div class="todo-actions" v-if="t.status==='active'">
-        <span class="chip" @click="done(t)">完成</span>
-        <span class="chip" @click="openEdit(t)">编辑</span>
-        <span class="chip" @click="remove(t)" style="color:var(--danger)">删除</span>
+      <div class="header-actions">
+        <button class="btn only-desktop" @click="openNew">＋ 新建待办 <kbd>N</kbd></button>
+        <span class="link small" @click="unbind">退出</span>
       </div>
     </div>
 
-    <div class="empty" v-if="!visibleTodos.length && !refreshing">
-      {{ filter==='active' ? '没有进行中的待办' : '暂无待办' }}
+    <div class="layout">
+      <!-- 桌面侧栏 -->
+      <aside class="side-col">
+        <div class="side-group">
+          <div class="side-label">视图</div>
+          <div class="nav-item" :class="{active: filter==='active'}" @click="setFilter('active')">
+            <span>进行中</span><span class="nav-count">{{ countActive }}</span>
+          </div>
+          <div class="nav-item" :class="{active: filter==='done'}" @click="setFilter('done')">
+            <span>已完成</span><span class="nav-count">{{ countDone }}</span>
+          </div>
+          <div class="nav-item" :class="{active: filter==='all'}" @click="setFilter('all')">
+            <span>全部待办</span><span class="nav-count">{{ todos.length }}</span>
+          </div>
+        </div>
+        <div class="side-group">
+          <div class="side-label">快捷操作</div>
+          <div class="nav-item" @click="openNew">＋ 新建待办</div>
+          <div class="nav-item" @click="refresh">↻ 立即同步</div>
+        </div>
+        <div class="side-panel">
+          <div class="sp-label">下一次提醒</div>
+          <div class="sp-value">{{ nextUpcoming }}</div>
+        </div>
+        <div class="side-panel">
+          <div class="sp-label">自动同步</div>
+          <div class="sp-value" style="color:#41464f;font-size:14px">每 20 秒 · {{ lastSyncText || '尚未同步' }}</div>
+        </div>
+        <div class="side-note">
+          快捷键：<kbd>N</kbd> 新建 · <kbd>/</kbd> 搜索 · <kbd>R</kbd> 刷新 ·
+          <kbd>Esc</kbd> 关闭 · <kbd>Ctrl/⌘ + Enter</kbd> 保存<br><br>
+          到点提醒仍由微信订阅消息推送，网页端只在页面打开时弹浏览器通知。
+        </div>
+      </aside>
+
+      <!-- 右侧主内容 -->
+      <main class="main-col">
+        <div class="card new-bar only-mobile" style="padding:12px 16px">
+          <button class="btn" @click="openNew">＋ 新建待办</button>
+        </div>
+
+        <div class="tabs">
+          <span class="chip only-mobile" :class="{on: filter==='active'}" @click="setFilter('active')">进行中</span>
+          <span class="chip only-mobile" :class="{on: filter==='done'}" @click="setFilter('done')">已完成</span>
+          <span class="chip only-mobile" :class="{on: filter==='all'}" @click="setFilter('all')">全部</span>
+          <input class="search-input only-desktop" v-model.trim="query" placeholder="搜索标题 / 备注    按 / 聚焦">
+          <span class="toolbar-stat only-desktop inline">{{ visibleTodos.length }} 条结果</span>
+          <span class="toolbar-spacer"></span>
+          <span class="chip" @click="refresh" v-if="!refreshing">刷新</span>
+          <span class="chip on" v-else>刷新中…</span>
+        </div>
+
+        <div class="todo-list">
+          <div class="card todo-card" v-for="t in visibleTodos" :key="t.id">
+            <div class="row-between">
+              <span class="todo-title" :class="{'chip-done': t.status==='done'}">{{ t.title || '（无标题）' }}</span>
+              <span class="tag" :class="'tag-'+t.priority">{{ priorityText(t.priority) }}优先级</span>
+            </div>
+            <div class="todo-note" v-if="t.note">{{ t.note }}</div>
+            <div class="todo-meta">
+              <span class="tag">{{ repeatText(t) }}</span>
+              <span class="tag" v-if="t.skip_holiday">跳过节假日</span>
+              <span class="tag tag-warn" v-if="t.status==='done' && t.manual_done">手工完成</span>
+              <span class="tag tag-done" v-if="t.created_from==='web'">来自网页</span>
+            </div>
+            <div class="todo-next" v-if="t.status==='active' && nextText(t)">下次提醒：{{ nextText(t) }}</div>
+            <div class="todo-next muted" v-if="t.status==='done'">已完成{{ t.done_at ? ' · ' + fmtTime(t.done_at) : '' }}</div>
+            <div class="todo-divider" v-if="t.status==='active'"></div>
+            <div class="todo-actions" v-if="t.status==='active'">
+              <span class="chip" @click="done(t)">完成</span>
+              <span class="chip" @click="openEdit(t)">编辑</span>
+              <span class="chip" @click="remove(t)" style="color:var(--danger)">删除</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="empty" v-if="!visibleTodos.length && !refreshing">
+          {{ query ? '没有匹配的待办' : (filter==='active' ? '没有进行中的待办' : '暂无待办') }}
+        </div>
+
+        <div class="card small muted footer-note only-mobile" style="font-size:12px;line-height:1.7">
+          <div>三端使用：电脑浏览器直接打开本页；安卓 Chrome / iOS Safari 用浏览器菜单「添加到主屏幕」，即可全屏当 App 用。</div>
+          <div>数据每 20 秒自动同步一次；网页端新建的待办同样会由微信小程序推送服务下发微信提醒。</div>
+          <div v-if="lastSyncText">上次同步 {{ lastSyncText }}</div>
+        </div>
+      </main>
     </div>
 
-    <!-- 新建/编辑弹层 -->
+    <!-- 新建/编辑弹层（桌面为两列表单） -->
     <div class="modal-mask" v-if="editing" @click.self="editing=null">
       <div class="modal">
         <div class="title">{{ editing.id ? '编辑待办' : '新建待办' }}</div>
-        <label>标题</label>
-        <input v-model.trim="form.title" maxlength="60" placeholder="要提醒自己的事">
-        <label>备注（可选）</label>
-        <textarea v-model.trim="form.note" rows="2" maxlength="500" placeholder="补充说明"></textarea>
-        <label>首次提醒时间</label>
-        <input type="datetime-local" v-model="form.remindLocal">
-        <label>重复方式</label>
-        <select v-model="form.repeat_type">
-          <option value="none">仅一次</option>
-          <option value="daily">每天</option>
-          <option value="weekly">每周</option>
-          <option value="monthly">每月</option>
-          <option value="yearly">每年</option>
-          <option value="workday">每工作日</option>
-          <option value="restday">每休息日</option>
-          <option value="hourly">每小时</option>
-          <option value="minutely">每分钟</option>
-        </select>
-        <label v-if="hasInterval">间隔（每 N 个{{ unitText }}）</label>
-        <input v-if="hasInterval" type="number" min="1" max="999" v-model.number="form.repeat_interval">
-        <div class="switch-row">
-          <span class="small">跳过法定节假日</span>
-          <span class="tgl"><input type="checkbox" v-model="form.skip_holiday"><span class="knob"></span></span>
-        </div>
-        <div class="switch-row" v-if="form.skip_holiday">
-          <span class="small">遇节假日</span>
-          <select v-model="form.holiday_action" style="width:140px">
-            <option value="skip">跳过不提醒</option>
-            <option value="postpone">顺延到下一工作日</option>
-          </select>
-        </div>
-        <div class="switch-row">
-          <span class="small">优先级</span>
-          <select v-model="form.priority" style="width:140px">
-            <option value="high">高</option>
-            <option value="medium">中</option>
-            <option value="low">低</option>
-          </select>
+        <div class="form-grid">
+          <div class="field">
+            <label>标题</label>
+            <input v-model.trim="form.title" maxlength="60" placeholder="要提醒自己的事">
+          </div>
+          <div class="field">
+            <label>首次提醒时间</label>
+            <input type="datetime-local" v-model="form.remindLocal">
+          </div>
+          <div class="field">
+            <label>重复方式</label>
+            <select v-model="form.repeat_type">
+              <option value="none">仅一次</option>
+              <option value="daily">每天</option>
+              <option value="weekly">每周</option>
+              <option value="monthly">每月</option>
+              <option value="yearly">每年</option>
+              <option value="workday">每工作日</option>
+              <option value="restday">每休息日</option>
+              <option value="hourly">每小时</option>
+              <option value="minutely">每分钟</option>
+            </select>
+          </div>
+          <div class="field" v-if="hasInterval">
+            <label>间隔（每 N 个{{ unitText }}）</label>
+            <input type="number" min="1" max="999" v-model.number="form.repeat_interval">
+          </div>
+          <div class="field field-full">
+            <label>备注（可选）</label>
+            <textarea v-model.trim="form.note" rows="2" maxlength="500" placeholder="补充说明"></textarea>
+          </div>
+          <div class="switch-row field-full">
+            <span class="small">跳过法定节假日</span>
+            <span class="tgl"><input type="checkbox" v-model="form.skip_holiday"><span class="knob"></span></span>
+          </div>
+          <div class="switch-row field-full" v-if="form.skip_holiday">
+            <span class="small">遇节假日</span>
+            <select v-model="form.holiday_action" style="width:180px">
+              <option value="skip">跳过不提醒</option>
+              <option value="postpone">顺延到下一工作日</option>
+            </select>
+          </div>
+          <div class="switch-row field-full">
+            <span class="small">优先级</span>
+            <select v-model="form.priority" style="width:180px">
+              <option value="high">高</option>
+              <option value="medium">中</option>
+              <option value="low">低</option>
+            </select>
+          </div>
+          <div class="switch-row field-full">
+            <span class="small">需要手工确认完成</span>
+            <span class="tgl"><input type="checkbox" v-model="form.manual_done"><span class="knob"></span></span>
+          </div>
         </div>
         <div class="modal-actions">
+          <span class="modal-hint only-desktop inline">Ctrl / ⌘ + Enter 保存 · Esc 关闭</span>
           <button class="btn btn-ghost" @click="editing=null">取消</button>
           <button class="btn" :disabled="busy || !form.title || !form.remindLocal" @click="save">
             {{ busy ? '保存中…' : '保存' }}
           </button>
         </div>
       </div>
-    </div>
-
-    <div class="card small muted" style="font-size:12px;line-height:1.7">
-      <div>三端使用：电脑浏览器直接打开本页；安卓 Chrome / iOS Safari 用浏览器菜单「添加到主屏幕」，即可全屏当 App 用。</div>
-      <div>数据每 20 秒自动同步一次；网页端新建的待办同样会由微信小程序推送服务下发微信提醒。</div>
-      <div v-if="lastSyncText">上次同步 {{ lastSyncText }}</div>
     </div>
   </template>
 

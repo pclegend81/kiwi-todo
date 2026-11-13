@@ -4,6 +4,8 @@
 
 KIWI Todo is a reminder-focused to-do app for WeChat. You capture a task once, and it keeps reminding you at the right moment — on a schedule you define, across your phone's native calendar, and through WeChat subscription messages even when the mini program is fully closed.
 
+![Desktop workbench UI — sample data](dist/desktop-preview.png)
+
 **Highlights**
 
 - **13 recurrence modes** — once, every X minutes/hours/days, weekly, monthly, yearly, and every-working-day, each with an adjustable interval. Start and end dates constrain any repeating rule, inclusive on both ends.
@@ -13,6 +15,8 @@ KIWI Todo is a reminder-focused to-do app for WeChat. You capture a task once, a
 - **Collaboration** — share a task as a WeChat card, or invite via a 6-character code; collaborators see the same todo list in real time.
 - **Configurable completion** — by default a finished reminder auto-archives; per-task you can require a manual "mark as done" confirmation instead.
 - **Batch management, filtering, history** — multi-select done/delete, combined priority + date-range + time-range filtering, and a searchable reminder log for every fired (or holiday-skipped) reminder.
+
+- **One codebase, three platforms.** A responsive PWA (`webapp/`) shares the same CloudBase `todos` collection with the mini program through an 8-character sync code and token binding. At ≥980px it becomes a desktop workbench — sidebar navigation, multi-column card grid, search toolbar, two-column editor and keyboard shortcuts — while phones keep a single-column UI installable to the home screen.
 
 ## Architecture
 

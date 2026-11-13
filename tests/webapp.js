@@ -188,5 +188,44 @@ test('app.js 使用 datetime-local -> toISOString，与小程序字段同构', (
   assert.ok(!js.includes('localhost:') || true)
 })
 
+test('PC 桌面工作台：响应式断点 + 两栏骨架 + 多列卡片网格', () => {
+  assert.ok(html.includes('@media (min-width: 980px)'), '缺桌面断点')
+  assert.ok(html.includes('class="layout"') && html.includes('class="side-col"'), '缺两栏骨架')
+  assert.ok(html.includes('class="todo-list"'), '待办列表必须包一层容器才能多列排布')
+  assert.ok(/grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(316px,\s*1fr\)\)/.test(html),
+    '桌面待办未使用自适应多列网格')
+  assert.ok(html.includes('grid-template-columns: 232px minmax(0, 1fr)'), '侧栏宽度丢失')
+  assert.ok(html.includes('.login-wrap'), '登录页应有桌面分栏')
+  assert.ok(html.includes('class="form-grid"'), '编辑弹层应有两列表单')
+  assert.ok(html.includes('form-grid > .field-full'), '跨两列的字段规则丢失')
+})
+
+test('PC 与手机布局互不干扰（基础态仍是手机窄栏）', () => {
+  assert.ok(/\.container\s*\{\s*max-width:\s*640px/.test(html), '手机端基础窄栏被破坏')
+  assert.ok(html.includes('.only-desktop { display: none !important; }'), '桌面元素在手机端必须隐藏')
+  assert.ok(html.includes('.only-mobile { display: none !important; }'), '手机元素在桌面端必须隐藏')
+  assert.ok(html.includes('.login-brand { display: none; }'), '桌面品牌区在手机端必须隐藏')
+  assert.ok(html.includes('@media (min-width: 700px) and (max-width: 979px)'),
+    '平板断点必须封顶，避免覆盖 980px 桌面规则')
+  // 手机端原有交互入口仍在
+  assert.ok(html.includes('class="chip only-mobile"'), '手机端筛选 chips 丢失')
+  assert.ok(html.includes('class="card new-bar only-mobile"'), '手机端新建按钮丢失')
+  assert.ok(html.includes('class="card small muted footer-note only-mobile"'), '手机端说明卡丢失')
+})
+
+test('桌面增强功能：搜索 / 计数 / 下一次提醒 / 快捷键', () => {
+  const js = read(path.join(WEB, 'app.js'))
+  assert.ok(html.includes('class="search-input only-desktop"'), '缺桌面搜索框')
+  assert.ok(html.includes('setFilter(') && html.includes('nextUpcoming') && html.includes('countActive'),
+    '缺侧栏导航所需的 computed / 方法')
+  for (const k of ['query', 'setFilter', 'onKeydown', 'nextUpcoming', 'countActive', 'countDone']) {
+    assert.ok(js.includes(k), 'app.js 缺少 ' + k)
+  }
+  assert.ok(js.includes("document.addEventListener('keydown'"), '快捷键未挂载')
+  assert.ok(js.includes("document.removeEventListener('keydown'"), '快捷键未卸载')
+  // 搜索只影响桌面显示，不能改变写入云端的字段形状
+  assert.ok(js.includes('remind_at: iso') && js.includes("status: 'active'"), '保存字段被改动')
+})
+
 console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败')
 if (failed) process.exit(1)

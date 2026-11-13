@@ -105,6 +105,7 @@
         toast: '',
         todos: [],
         filter: 'active',
+        query: '',           // 桌面工具栏搜索；手机端不显示输入框，始终为空
         editing: null,
         form: defaultForm(),
         lastSyncText: '',
@@ -114,14 +115,35 @@
     computed: {
       visibleTodos: function () {
         var self = this
+        var q = String(this.query || '').trim().toLowerCase()
         var list = this.todos.filter(function (t) {
-          if (self.filter === 'active') return t.status === 'active'
-          if (self.filter === 'done') return t.status === 'done'
+          if (self.filter === 'active' && t.status !== 'active') return false
+          if (self.filter === 'done' && t.status !== 'done') return false
+          if (q && (String(t.title || '') + ' ' + String(t.note || '')).toLowerCase().indexOf(q) < 0) return false
           return true
         })
         return list.sort(function (a, b) {
           return new Date(a.remind_at).getTime() - new Date(b.remind_at).getTime()
         })
+      },
+      countActive: function () {
+        return this.todos.filter(function (t) { return t.status === 'active' }).length
+      },
+      countDone: function () {
+        return this.todos.filter(function (t) { return t.status === 'done' }).length
+      },
+      /** 桌面侧栏「下一次提醒」：取所有进行中待办里最近的一次 */
+      nextUpcoming: function () {
+        var best = null
+        var list = this.todos || []
+        for (var i = 0; i < list.length; i++) {
+          if (list[i].status !== 'active') continue
+          try {
+            var n = core.nextOccurrence(list[i], Date.now(), holidayMap)
+            if (n && (!best || n.at < best.at)) best = n
+          } catch (e) { /* 单条规则异常不影响其它待办 */ }
+        }
+        return best ? best.atText : '暂无待提醒'
       },
       hasInterval: function () {
         return ['daily', 'weekly', 'monthly', 'yearly', 'hourly', 'minutely']
@@ -145,6 +167,9 @@
       document.addEventListener('visibilitychange', function () {
         if (!document.hidden && self.bound) self.refresh(true)
       })
+      // 桌面端键盘快捷键（手机没有实体键盘，触发不到，无需做平台判断）
+      this.keyHandler = function (e) { self.onKeydown(e) }
+      document.addEventListener('keydown', this.keyHandler)
       // 页面打开期间的本地通知（Web 无法像微信订阅消息那样后台推送）
       this.notifyTimer = setInterval(function () { self.checkDue() }, 30000)
       if ('serviceWorker' in navigator) {
@@ -155,9 +180,42 @@
     beforeUnmount: function () {
       clearInterval(this.pollTimer)
       clearInterval(this.notifyTimer)
+      if (this.keyHandler) document.removeEventListener('keydown', this.keyHandler)
     },
 
     methods: {
+      setFilter: function (f) {
+        this.filter = f
+      },
+
+      /** 桌面快捷键：N 新建 / 搜索 / R 刷新 / Esc 关闭 / Ctrl(⌘)+Enter 保存 */
+      onKeydown: function (e) {
+        var el = e.target || {}
+        var tag = String(el.tagName || '').toLowerCase()
+        var typing = tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable === true
+        if (this.editing && (e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+          e.preventDefault()
+          this.save()
+          return
+        }
+        if (e.key === 'Escape') {
+          if (this.editing) this.editing = null
+          else if (this.query) this.query = ''
+          return
+        }
+        if (typing || this.editing || !this.bound) return
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault()
+          this.openNew()
+        } else if (e.key === '/') {
+          var box = document.querySelector('.search-input')
+          if (box && box.offsetParent !== null) { e.preventDefault(); box.focus() }
+        } else if (e.key === 'r' || e.key === 'R') {
+          e.preventDefault()
+          this.refresh()
+        }
+      },
+
       showToast: function (msg, ms) {
         var self = this
         this.toast = msg
