@@ -878,3 +878,27 @@ node tests/compact-list.js  # 首页待办紧凑布局：单卡高度预算 / �
   配合 `feishu_links` 映射表；飞书侧轮询只认 `description` 里带 KIWI 标记的日程，
   否则会把用户飞书里的原生日程全捞进小程序，且 A→B→A 无限复制。
 - 飞书日程没有「完成」概念，完成/删除双向同步要单独定策略（建议一期只做双向新增）。
+
+---
+
+## 多端同步（PC / 安卓 / iOS）· 2026-11-13
+
+完整部署步骤见 **[`WEBAPP_DEPLOY.md`](./WEBAPP_DEPLOY.md)**，这里只记要点，避免重复踩坑。
+
+- 技术路线：**一套 Web/PWA（`webapp/`）覆盖三端**，共用同一个微信云开发后台；
+  交付包 `dist/kiwi-pc.zip` / `kiwi-android.zip` / `kiwi-ios.zip`。
+  用户已确认不走原生三件套（iOS 需 Xcode + Apple 账号，本环境无法编译 ipa）。
+- 身份：小程序「我的」新增「网页 / 电脑端同步」卡 → 8 位同步口令 →
+  网页端 `bind` 换 token（存在 `web_bindings` 集合，30 天有效）。
+  **`web_bindings` 权限必须「仅管理端可读写」**，否则 token 可被公开读取冒用。
+- 云端新增 **`webapi` 云函数**（HTTP 访问服务 `/webapi`，需放行 POST + OPTIONS、开集成响应）。
+  它**不需要 `config.json`、也不需要上传触发器**——这和 `pusher` 的定时器触发器是两回事。
+- 网页端写入的待办必须与 `edit.js onSave` 同构：`remind_at` / `status:'active'` / `openid` /
+  **三个游标 `last_logged_at`+`last_pushed_at`+`last_reminded_at`**（不置会补发历史提醒）/
+  `next_remind_at`。pusher 实际只扫 `remind_at` 自行枚举，不依赖 `next_remind_at`。
+- `reminder-core.js` 现在有 **5 份副本**（utils / pusher / pushapi / webapi / webapp），
+  节假日表 **4 份**（pushapi 不加载），`tests/webapp.js` 会校验 md5 一致。
+- 测试：`tests/webapi.js`（24 项，mock 云数据库跑全链路）、`tests/webapp.js`（13 项，
+  含用 Vue 编译器真编译 index.html 模板）。改多端代码后必须两个都跑。
+- 限制：PWA 关闭后无后台推送（真正的提醒仍靠微信订阅消息）；网页端 20 秒轮询；
+  时区按设备本地解释，非 UTC+8 会偏移；正式发布后记得把两处 `MINIPROGRAM_STATE` 改回 `'formal'`。

@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#007aff">
+<title>KIWI待办 · 网页版</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+:root {
+  --bg: #f2f3f7; --card: #ffffff; --text: #1c1e21; --muted: #8a8f99;
+  --accent: #007aff; --danger: #e64340; --ok: #09bb07; --border: #e5e7eb;
+  --radius: 14px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.5;
+}
+.container { max-width: 640px; margin: 0 auto; padding: 16px 16px calc(24px + env(safe-area-inset-bottom)); }
+.page-header { padding: 20px 4px 12px; }
+.page-title { font-size: 24px; font-weight: 800; }
+.page-subtitle { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.card {
+  background: var(--card); border-radius: var(--radius); padding: 16px;
+  margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06);
+}
+.row-between { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.title { font-weight: 700; font-size: 16px; }
+.small { font-size: 13px; }
+.muted { color: var(--muted); }
+.link { color: var(--accent); font-weight: 600; cursor: pointer; user-select: none; }
+.btn {
+  display: block; width: 100%; text-align: center; padding: 11px 0;
+  border-radius: 10px; background: var(--accent); color: #fff; font-weight: 600;
+  font-size: 15px; border: none; cursor: pointer; user-select: none;
+}
+.btn:active { opacity: .8; }
+.btn-ghost { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+.btn-danger-ghost { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
+input, textarea, select {
+  width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 10px;
+  font-size: 15px; font-family: inherit; outline: none; background: #fff; color: var(--text);
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+.todo-card { cursor: default; }
+.todo-title { font-weight: 700; font-size: 16px; word-break: break-all; }
+.todo-note { color: var(--muted); font-size: 13px; margin-top: 4px; word-break: break-all; }
+.todo-meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tag {
+  font-size: 12px; padding: 2px 9px; border-radius: 20px; white-space: nowrap;
+  background: #eef2f7; color: #556;
+}
+.tag-high { background: #fdecec; color: var(--danger); }
+.tag-low { background: #edf7ee; color: var(--ok); }
+.tag-collab, .tag-done { background: #eef4ff; color: var(--accent); }
+.tag-warn { background: #fff4e5; color: #b8860b; }
+.todo-next { margin-top: 8px; font-size: 14px; color: var(--accent); font-weight: 600; }
+.todo-divider { height: 1px; background: var(--border); margin: 12px 0; }
+.todo-actions { display: flex; gap: 8px; }
+.chip {
+  padding: 5px 14px; border-radius: 18px; font-size: 13px; cursor: pointer;
+  background: #eef2f7; color: #445; user-select: none; white-space: nowrap; flex-shrink: 0;
+}
+.chip.on { background: var(--accent); color: #fff; }
+.chip-done { text-decoration: line-through; }
+.empty { text-align: center; color: var(--muted); padding: 40px 0; }
+.sync-box {
+  border: 2px dashed var(--accent); border-radius: 12px; background: #f0f7ff;
+  padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.sync-code { font-size: 22px; font-weight: 800; letter-spacing: 4px; color: var(--accent); font-family: Menlo, Consolas, monospace; }
+.toast {
+  position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+  background: rgba(30,30,32,.92); color: #fff; padding: 10px 20px; border-radius: 10px;
+  font-size: 14px; z-index: 99; max-width: 86vw; text-align: center; pointer-events: none;
+}
+.tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.modal-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.modal {
+  background: var(--card); border-radius: 16px; padding: 20px; width: 100%; max-width: 480px;
+  max-height: 86vh; overflow-y: auto;
+}
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+.modal-actions .btn { flex: 1; }
+.switch-row { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.tgl { position: relative; width: 46px; height: 26px; flex-shrink: 0; }
+.tgl input { opacity: 0; width: 100%; height: 100%; position: absolute; cursor: pointer; z-index: 2; margin: 0; }
+.tgl .knob { position: absolute; inset: 0; background: #d8dbe0; border-radius: 13px; transition: .2s; }
+.tgl .knob::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 22px; height: 22px;
+  background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.tgl input:checked + .knob { background: var(--ok); }
+.tgl input:checked + .knob::after { left: 22px; }
+@media (min-width: 700px) { .container { max-width: 720px; } body { font-size: 16px; } }
+</style>
+</head>
+<body>
+<div class="container" id="app">
+  <!-- 未绑定：口令登录页 -->
+  <template v-if="!bound">
+    <div class="page-header">
+      <div class="page-title">KIWI待办</div>
+      <div class="page-subtitle">网页版 · 与微信小程序互相同步</div>
+    </div>
+    <div class="card">
+      <div class="title">输入同步口令</div>
+      <div class="small muted" style="margin-top:6px">
+        打开微信小程序 KIWI待办 → 「我的」→ 「网页 / 电脑端同步」→ 生成同步口令，把 8 位口令填到这里。
+      </div>
+      <label>同步口令（8 位，不含 0/O/1/I/L）</label>
+      <input v-model.trim="codeInput" maxlength="8" placeholder="如 AB23CD45"
+             style="font-size:22px;letter-spacing:6px;text-align:center;font-weight:700"
+             @keyup.enter="bind">
+      <button class="btn" style="margin-top:16px" :disabled="!codeInput || busy" @click="bind">
+        {{ busy ? '绑定中…' : '绑定并同步' }}
+      </button>
+      <div class="small muted" style="margin-top:10px">
+        口令绑定后本设备 30 天内免输入；可在小程序里随时「作废口令」。
+      </div>
+      <div style="margin-top:14px">
+        <span class="link small" @click="showApi=!showApi">接口地址设置（部署时填一次）</span>
+        <div v-if="showApi || !apiUrl" style="margin-top:8px">
+          <input v-model.trim="apiUrl" placeholder="https://xxx.service.tcloudbase.com/webapi">
+          <div class="small muted" style="margin-top:6px">
+            填云开发「HTTP 访问服务」里 webapi 的完整地址。首次部署时必填，之后本设备自动记住。
+          </div>
+        </div>
+      </div>
+    </div>
+  </template>
+
+  <!-- 已绑定：主列表 -->
+  <template v-else>
+    <div class="page-header row-between">
+      <div>
+        <div class="page-title">KIWI待办</div>
+        <div class="page-subtitle">已同步 · {{ todos.length }} 条</div>
+      </div>
+      <span class="link small" @click="unbind">退出</span>
+    </div>
+
+    <div class="card" style="padding:12px 16px">
+      <button class="btn" @click="openNew">＋ 新建待办</button>
+    </div>
+
+    <div class="tabs">
+      <span class="chip" :class="{on: filter==='active'}" @click="filter='active'">进行中</span>
+      <span class="chip" :class="{on: filter==='done'}" @click="filter='done'">已完成</span>
+      <span class="chip" :class="{on: filter==='all'}" @click="filter='all'">全部</span>
+      <span style="flex:1"></span>
+      <span class="chip" @click="refresh" v-if="!refreshing">刷新</span>
+      <span class="chip on" v-else>刷新中…</span>
+    </div>
+
+    <div class="card todo-card" v-for="t in visibleTodos" :key="t.id">
+      <div class="row-between">
+        <span class="todo-title" :class="{'chip-done': t.status==='done'}">{{ t.title || '（无标题）' }}</span>
+        <span class="tag" :class="'tag-'+t.priority">{{ priorityText(t.priority) }}优先级</span>
+      </div>
+      <div class="todo-note" v-if="t.note">{{ t.note }}</div>
+      <div class="todo-meta">
+        <span class="tag">{{ repeatText(t) }}</span>
+        <span class="tag" v-if="t.skip_holiday">跳过节假日</span>
+        <span class="tag tag-warn" v-if="t.status==='done' && t.manual_done">手工完成</span>
+        <span class="tag tag-done" v-if="t.created_from==='web'">来自网页</span>
+      </div>
+      <div class="todo-next" v-if="t.status==='active' && nextText(t)">下次提醒：{{ nextText(t) }}</div>
+      <div class="todo-next muted" v-if="t.status==='done'">已完成{{ t.done_at ? ' · ' + fmtTime(t.done_at) : '' }}</div>
+      <div class="todo-divider" v-if="t.status==='active'"></div>
+      <div class="todo-actions" v-if="t.status==='active'">
+        <span class="chip" @click="done(t)">完成</span>
+        <span class="chip" @click="openEdit(t)">编辑</span>
+        <span class="chip" @click="remove(t)" style="color:var(--danger)">删除</span>
+      </div>
+    </div>
+
+    <div class="empty" v-if="!visibleTodos.length && !refreshing">
+      {{ filter==='active' ? '没有进行中的待办' : '暂无待办' }}
+    </div>
+
+    <!-- 新建/编辑弹层 -->
+    <div class="modal-mask" v-if="editing" @click.self="editing=null">
+      <div class="modal">
+        <div class="title">{{ editing.id ? '编辑待办' : '新建待办' }}</div>
+        <label>标题</label>
+        <input v-model.trim="form.title" maxlength="60" placeholder="要提醒自己的事">
+        <label>备注（可选）</label>
+        <textarea v-model.trim="form.note" rows="2" maxlength="500" placeholder="补充说明"></textarea>
+        <label>首次提醒时间</label>
+        <input type="datetime-local" v-model="form.remindLocal">
+        <label>重复方式</label>
+        <select v-model="form.repeat_type">
+          <option value="none">仅一次</option>
+          <option value="daily">每天</option>
+          <option value="weekly">每周</option>
+          <option value="monthly">每月</option>
+          <option value="yearly">每年</option>
+          <option value="workday">每工作日</option>
+          <option value="restday">每休息日</option>
+          <option value="hourly">每小时</option>
+          <option value="minutely">每分钟</option>
+        </select>
+        <label v-if="hasInterval">间隔（每 N 个{{ unitText }}）</label>
+        <input v-if="hasInterval" type="number" min="1" max="999" v-model.number="form.repeat_interval">
+        <div class="switch-row">
+          <span class="small">跳过法定节假日</span>
+          <span class="tgl"><input type="checkbox" v-model="form.skip_holiday"><span class="knob"></span></span>
+        </div>
+        <div class="switch-row" v-if="form.skip_holiday">
+          <span class="small">遇节假日</span>
+          <select v-model="form.holiday_action" style="width:140px">
+            <option value="skip">跳过不提醒</option>
+            <option value="postpone">顺延到下一工作日</option>
+          </select>
+        </div>
+        <div class="switch-row">
+          <span class="small">优先级</span>
+          <select v-model="form.priority" style="width:140px">
+            <option value="high">高</option>
+            <option value="medium">中</option>
+            <option value="low">低</option>
+          </select>
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" @click="editing=null">取消</button>
+          <button class="btn" :disabled="busy || !form.title || !form.remindLocal" @click="save">
+            {{ busy ? '保存中…' : '保存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card small muted" style="font-size:12px;line-height:1.7">
+      <div>三端使用：电脑浏览器直接打开本页；安卓 Chrome / iOS Safari 用浏览器菜单「添加到主屏幕」，即可全屏当 App 用。</div>
+      <div>数据每 20 秒自动同步一次；网页端新建的待办同样会由微信小程序推送服务下发微信提醒。</div>
+      <div v-if="lastSyncText">上次同步 {{ lastSyncText }}</div>
+    </div>
+  </template>
+
+  <div class="toast" v-if="toast">{{ toast }}</div>
+</div>
+
+<!-- 本地 Vue（不依赖 CDN，PWA 离线也能用） -->
+<script src="vendor/vue.global.prod.js"></script>
+<!-- 共享模块是 CommonJS 风格，浏览器里用一个极小的桥接把导出挂到全局 -->
+<script>
+  var module = { exports: {} }; var exports = module.exports;
+</script>
+<script src="reminder-core.js"></script>
+<script>
+  window.KiwiCore = module.exports;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="holidays-2027.js"></script>
+<script>
+  window.KIWI_HOLIDAYS = module.exports.HOLIDAYS_2027;
+  delete window.module; delete window.exports;
+</script>
+<script src="app.js"></script>
+</body>
+</html>

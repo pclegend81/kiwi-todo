@@ -18,3 +18,24 @@
   font-size: 27rpx;
   font-weight: 600;
 }
+
+/* 同步口令展示框：大号等宽字，点击整块即复制 */
+.sync-code-box {
+  margin-top: 20rpx;
+  padding: 24rpx;
+  border: 2rpx dashed #007aff;
+  border-radius: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f0f7ff;
+}
+
+.sync-code {
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+  font-family: Menlo, Consolas, monospace;
+  color: #007aff;
+  flex-shrink: 0;
+}

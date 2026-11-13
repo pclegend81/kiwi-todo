@@ -1,0 +1,9 @@
+{
+  "name": "webapi",
+  "version": "1.0.0",
+  "description": "KIWI待办 网页端HTTP接口",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "~2.6.3"
+  }
+}

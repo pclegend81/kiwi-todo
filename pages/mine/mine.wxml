@@ -25,6 +25,24 @@
     </view>
   </view>
 
+  <!-- 网页/电脑端同步：口令绑定到本账号，电脑浏览器、安卓/iOS 浏览器与小程序互相同步 -->
+  <view class="card">
+    <view class="row-between">
+      <text class="title">网页 / 电脑端同步</text>
+      <text wx:if="{{syncCode}}" class="link" bindtap="onSyncRevoke">作废口令</text>
+    </view>
+    <view class="small muted" style="margin-top:10rpx">
+      在电脑浏览器、手机浏览器打开 KIWI待办网页版，输入这个口令即可和这里互相同步待办。
+    </view>
+    <view wx:if="{{syncCode}}" class="sync-code-box" bindtap="onSyncGenerate">
+      <text class="sync-code">{{syncCode}}</text>
+      <text class="small muted">{{syncExpireText || '点击复制'}}</text>
+    </view>
+    <view class="btn" style="margin-top:20rpx" bindtap="onSyncGenerate">
+      {{syncCode ? '复制口令' : '生成同步口令'}}
+    </view>
+  </view>
+
   <view class="card">
     <view class="row-between">
       <text class="title">{{signedIn ? '已登录' : '未登录'}}</text>
