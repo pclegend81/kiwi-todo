@@ -1,18 +1,28 @@
 const store = require('../../utils/store')
 const subscribe = require('../../utils/subscribe')
 const push = require('../../utils/push')
+const i18n = require('../../utils/i18n')
 const { callFunction } = require('../../utils/cloud')
 const { onShareAppMessage } = require('../../utils/share')
 
 const app = getApp()
+
+const t = (key, vars) => i18n.t(key, vars)
 
 Page({
   onAnyTap: subscribe.onAnyTap,
   onShareAppMessage: onShareAppMessage,
   data: {
     signedIn: false,
-    // 节假日卡片副标题：由内置种子年份动态生成（避免写死「2026、2027」）
-    holidayHint: '内置官方安排，可自行增删；修改后对所有待办生效。',
+    // 节假日卡片副标题：由当前地区种子年份动态生成（避免写死年份）
+    holidayHint: '',
+    holidayFromText: '',
+    // 语言选择：11 种苹果实时翻译语言，切换会同时换当地节假日
+    T: {},
+    lang: 'zh-CN',
+    langLabels: [],
+    langIndex: 0,
+    regionName: '',
     // 同步口令：网页/电脑端凭它绑定到本账号，实现多端同步
     syncCode: '',
     syncExpireText: '',
@@ -22,17 +32,46 @@ Page({
   onShow() {
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 2 })
+      if (typeof this.getTabBar().applyLang === 'function') this.getTabBar().applyLang()
     }
-    const seedYears = Array.from(
-      new Set((store.SEED_HOLIDAYS || []).map((h) => String(h.day).slice(0, 4)))
-    ).sort()
-    if (seedYears.length) {
-      this.setData({
-        holidayHint: '内置 ' + seedYears.join('、') + ' 年官方安排，可自行增删；修改后对所有待办生效。',
-      })
-    }
+    this.applyLangTexts()
     this.refreshSession()
     this.refreshSyncBinding()
+  },
+
+  /** 注入当前语言字典 + 语言选择器 + 当前地区节假日说明 */
+  applyLangTexts() {
+    const lang = i18n.current()
+    const seed = store.regionSeed(i18n.region(lang))
+    const years = Array.from(new Set((seed || []).map((h) => String(h.day).slice(0, 4)))).sort()
+    const labels = i18n.LANGS.map((l) => l.label)
+    const idx = Math.max(0, i18n.LANGS.findIndex((l) => l.code === lang))
+    i18n.applyPage(this)
+    this.setData({
+      langLabels: labels,
+      langIndex: idx,
+      holidayHint: years.length ? t('mp_holiday_hint', { years: years.join('、') }) : '',
+      holidayFromText: t('holiday_from', { name: i18n.regionName(lang) }),
+    })
+  },
+
+  /** app.setLang() 会回调当前页，保证不用切页就能看到新文案与地区 */
+  onLangChanged() {
+    this.applyLangTexts()
+    wx.showToast({
+      title: t('mp_region_toast', { name: i18n.regionName() }),
+      icon: 'none',
+      duration: 1800,
+    })
+  },
+
+  /** 选择语言：picker 的 change 不在 tap 同步链里，先同步补一次订阅额度 */
+  onLangChange(e) {
+    subscribe.renew()
+    const idx = Number(e.detail.value)
+    const item = i18n.LANGS[idx]
+    if (!item) return
+    if (app.setLang(item.code)) this.onLangChanged()
   },
 
   async refreshSession() {
@@ -43,17 +82,17 @@ Page({
   async onLogin() {
     const { session, error } = await store.wechatLogin()
     if (error || !session) {
-      wx.showToast({ title: (error && error.message) || '登录失败', icon: 'none' })
+      wx.showToast({ title: (error && error.message) || t('mp_t_login_fail'), icon: 'none' })
       return
     }
-    wx.showToast({ title: '登录成功', icon: 'success' })
+    wx.showToast({ title: t('mp_t_login_ok'), icon: 'success' })
     this.setData({ signedIn: true })
   },
 
   async onSignOut() {
     await store.signOut()
     this.setData({ signedIn: false })
-    wx.showToast({ title: '已退出', icon: 'none' })
+    wx.showToast({ title: t('mp_t_logout'), icon: 'none' })
   },
 
   goHolidays() {
@@ -67,9 +106,9 @@ Page({
       tmplIds: subscribe.templateIds(),
       onResult(res, info) {
         if (info.accepted > 0) {
-          wx.showToast({ title: '已开启，待办到点会提醒', icon: 'none', duration: 1600 })
+          wx.showToast({ title: t('mp_t_auth_ok'), icon: 'none', duration: 1600 })
         } else {
-          wx.showToast({ title: '未授权：在弹窗中点「允许」', icon: 'none', duration: 1800 })
+          wx.showToast({ title: t('mp_t_auth_no'), icon: 'none', duration: 1800 })
         }
       },
     })
@@ -83,15 +122,15 @@ Page({
 
   /** 发一条测试提醒，验证授权是否生效（需先授权，否则会报 43101） */
   async onTestTap() {
-    wx.showLoading({ title: '发送中…' })
+    wx.showLoading({ title: t('mp_t_sending') })
     try {
       // callFunction 仅在 result.ok 为真时 resolve，故能走到这里即发送成功
       await push.sendTest()
       wx.hideLoading()
-      wx.showToast({ title: '测试提醒已发送，请查收', icon: 'none', duration: 1800 })
+      wx.showToast({ title: t('mp_t_test_ok'), icon: 'none', duration: 1800 })
     } catch (e) {
       wx.hideLoading()
-      wx.showToast({ title: (e && e.message) || '发送失败，请先开启授权', icon: 'none', duration: 2000 })
+      wx.showToast({ title: (e && e.message) || t('mp_t_test_fail'), icon: 'none', duration: 2000 })
     }
   },
 
@@ -114,14 +153,15 @@ Page({
   formatExpire(iso) {
     const d = new Date(iso)
     if (isNaN(d.getTime())) return ''
-    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') + ' 前有效'
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' +
+      String(d.getDate()).padStart(2, '0') + t('mp_t_expire')
   },
 
   /** 生成/查看口令，成功后复制到剪贴板方便直接粘贴到网页端 */
   async onSyncGenerate() {
     if (this.data.syncLoading) return
     if (!(await store.ensureOpenid())) {
-      wx.showToast({ title: '请先登录', icon: 'none' })
+      wx.showToast({ title: t('mp_t_need_login'), icon: 'none' })
       return
     }
     this.setData({ syncLoading: true })
@@ -133,10 +173,10 @@ Page({
         syncCode: res.code,
         syncExpireText: '',
       })
-      wx.showToast({ title: '口令已复制', icon: 'none', duration: 1600 })
+      wx.showToast({ title: t('mp_t_copied'), icon: 'none', duration: 1600 })
       this.refreshSyncBinding()
     } catch (e) {
-      wx.showToast({ title: (e && e.message) || '生成失败，请稍后再试', icon: 'none', duration: 2000 })
+      wx.showToast({ title: (e && e.message) || t('mp_t_gen_fail'), icon: 'none', duration: 2000 })
     } finally {
       this.setData({ syncLoading: false })
     }
@@ -146,19 +186,19 @@ Page({
   async onSyncRevoke() {
     const that = this
     wx.showModal({
-      title: '作废同步口令',
-      content: '已绑定的网页/电脑端将全部退出登录，需要重新输入口令才能同步。确定作废？',
-      confirmText: '作废',
+      title: t('mp_t_revoke_title'),
+      content: t('mp_t_revoke_desc'),
+      confirmText: t('mp_t_revoke_confirm'),
       confirmColor: '#e64340',
       success(res) {
         if (!res.confirm) return
         callFunction('webapi', { action: 'revokeBinding' })
           .then(() => {
             that.setData({ syncCode: '', syncExpireText: '' })
-            wx.showToast({ title: '已作废', icon: 'none' })
+            wx.showToast({ title: t('mp_t_revoke_ok'), icon: 'none' })
           })
           .catch((e) => {
-            wx.showToast({ title: (e && e.message) || '作废失败', icon: 'none' })
+            wx.showToast({ title: (e && e.message) || t('mp_t_revoke_fail'), icon: 'none' })
           })
       },
     })

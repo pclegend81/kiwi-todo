@@ -1,26 +1,27 @@
 <view class="container" bindtap="onAnyTap">
 
   <view class="page-header">
-    <text class="page-title">节假日</text>
+    <text class="page-title">{{T.mp_hol_title}}</text>
     <view class="page-subtitle">{{seedYearsText}}</view>
+    <view class="page-subtitle">{{regionNoteText}}</view>
   </view>
 
   <view class="card">
-    <view class="title">添加节假日</view>
+    <view class="title">{{T.hol_add_card}}</view>
     <view class="divider"></view>
 
     <view class="field">
-      <text class="field-label">日期</text>
+      <text class="field-label">{{T.mp_hol_date}}</text>
       <picker mode="date" value="{{newDay}}" start="{{minDay}}" end="2035-12-31" bindchange="onNewDay">
         <view class="picker-value">{{newDay}}</view>
       </picker>
     </view>
 
     <view class="field">
-      <text class="field-label">名称</text>
+      <text class="field-label">{{T.mp_hol_name}}</text>
       <input
         class="input"
-        placeholder="例如：国庆节"
+        placeholder="{{T.hol_ph_example}}"
         maxlength="20"
         value="{{newName}}"
         bindinput="onNewName"
@@ -28,31 +29,31 @@
     </view>
 
     <view class="field" style="border-bottom:none">
-      <text class="field-label">类型</text>
+      <text class="field-label">{{T.mp_hol_kind}}</text>
       <picker mode="selector" range="{{kindNames}}" value="{{newKindIndex}}" bindchange="onNewKind">
         <view class="picker-value">{{kindNames[newKindIndex]}}</view>
       </picker>
     </view>
 
-    <view class="btn" style="margin-top:24rpx" bindtap="onAdd">添加</view>
+    <view class="btn" style="margin-top:24rpx" bindtap="onAdd">{{T.mp_hol_add}}</view>
   </view>
 
   <view class="card">
     <view class="row-between">
-      <text class="title">已维护 {{list.length}} 天</text>
-      <text class="link" bindtap="onRestore">{{missingCount > 0 ? '恢复内置 ' + missingCount + ' 天' : '恢复内置安排'}}</text>
+      <text class="title">{{maintainedText}}</text>
+      <text class="link" bindtap="onRestore">{{restoreText}}</text>
     </view>
     <view class="divider"></view>
-    <view class="small muted">放假（holiday）当日跳过提醒；调休补班（workday）周末照常提醒。</view>
-    <view class="small muted" style="margin-top:10rpx">列表始终显示内置年份的完整安排，可逐条编辑、删除；删错了点右上角恢复。</view>
-    <view class="small muted" style="margin-top:10rpx">已结束年份的安排会自动清理，不在此显示。</view>
+    <view class="small muted">{{T.hol_desc1}}</view>
+    <view class="small muted" style="margin-top:10rpx">{{T.hol_desc2}}</view>
+    <view class="small muted" style="margin-top:10rpx">{{T.hol_desc3}}</view>
   </view>
 
-  <view wx:if="{{loading}}" class="empty">加载中…</view>
+  <view wx:if="{{loading}}" class="empty">{{T.idx_loading}}</view>
 
   <view wx:if="{{!loading && list.length === 0}}" class="empty">
-    <view>暂无节假日数据</view>
-    <view class="small" style="margin-top:16rpx">点右上角「恢复内置安排」写入官方安排</view>
+    <view>{{T.hol_empty}}</view>
+    <view class="small" style="margin-top:16rpx">{{T.hol_empty_desc}}</view>
   </view>
 
   <view
@@ -67,10 +68,10 @@
   >
     <view class="row-between">
       <text class="holiday-day">{{item.day}} {{item.weekday}}</text>
-      <view class="tag {{item.kind === 'holiday' ? 'tag-orange' : 'tag-blue'}}">{{item.kind === 'holiday' ? '放假' : '调休补班'}}</view>
+      <view class="tag {{item.kind === 'holiday' ? 'tag-orange' : 'tag-blue'}}">{{item.kind === 'holiday' ? T.mp_hol_holiday : T.mp_hol_workday}}</view>
     </view>
     <view class="small muted" style="margin-top:8rpx">
-      {{item.name}}<text wx:if="{{item.source === 'seed'}}" class="seed-mark"> · 内置</text>
+      {{item.name}}<text wx:if="{{item.source === 'seed'}}" class="seed-mark">{{T.hol_seed_mark}}</text>
     </view>
     <view class="holiday-actions">
       <view
@@ -80,33 +81,33 @@
         data-day="{{item.day}}"
         data-name="{{item.name}}"
         data-kind="{{item.kind}}"
-      >编辑</view>
+      >{{T.mp_hol_edit}}</view>
       <view
         class="mini-btn mini-btn-danger"
         catchtap="onDelete"
         data-id="{{item.id}}"
         data-day="{{item.day}}"
-      >删除</view>
+      >{{T.mp_hol_delete}}</view>
     </view>
   </view>
 
   <!-- 编辑弹层：catchtap 截断根节点冒泡，避免与订阅授权弹窗同时弹出 -->
   <view wx:if="{{editVisible}}" class="modal-mask" catchtap="onEditCancel">
     <view class="modal-panel" catchtap="noop">
-      <view class="modal-title">编辑节假日</view>
+      <view class="modal-title">{{T.hol_edit_title}}</view>
 
       <view class="field">
-        <text class="field-label">日期</text>
+        <text class="field-label">{{T.mp_hol_date}}</text>
         <picker mode="date" value="{{editDay}}" start="{{minDay}}" end="2035-12-31" bindchange="onEditDay">
           <view class="picker-value">{{editDay}}</view>
         </picker>
       </view>
 
       <view class="field">
-        <text class="field-label">名称</text>
+        <text class="field-label">{{T.mp_hol_name}}</text>
         <input
           class="input"
-          placeholder="例如：国庆节"
+          placeholder="{{T.hol_ph_example}}"
           maxlength="20"
           value="{{editName}}"
           bindinput="onEditName"
@@ -114,15 +115,15 @@
       </view>
 
       <view class="field" style="border-bottom:none">
-        <text class="field-label">类型</text>
+        <text class="field-label">{{T.mp_hol_kind}}</text>
         <picker mode="selector" range="{{kindNames}}" value="{{editKindIndex}}" bindchange="onEditKind">
           <view class="picker-value">{{kindNames[editKindIndex]}}</view>
         </picker>
       </view>
 
       <view class="modal-actions">
-        <view class="btn btn-ghost modal-btn" catchtap="onEditCancel">取消</view>
-        <view class="btn modal-btn" catchtap="onEditSave">保存</view>
+        <view class="btn btn-ghost modal-btn" catchtap="onEditCancel">{{T.mp_hol_cancel}}</view>
+        <view class="btn modal-btn" catchtap="onEditSave">{{T.mp_hol_save}}</view>
       </view>
     </view>
   </view>

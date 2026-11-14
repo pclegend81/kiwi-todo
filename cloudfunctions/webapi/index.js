@@ -43,7 +43,7 @@ const _ = db.command
 
 process.env.TZ = 'Asia/Shanghai'
 
-const BUILD = '2026-11-13b'
+const BUILD = '2026-11-13c'
 const core = require('./reminder-core')
 const oauth = require('./oauth')
 const { HOLIDAYS_2027 } = require('./holidays-2027')
@@ -545,7 +545,7 @@ async function actStats(event) {
 async function actOauthProviders() {
   const all = oauth.listProviders()
   const enabled = all.filter(function (p) { return p.enabled })
-    .map(function (p) { return { id: p.id, name: p.name, pkce: p.pkce } })
+    .map(function (p) { return { id: p.id, name: p.name, pkce: p.pkce, regions: p.regions || [] } })
   return httpJson(200, { ok: true, providers: enabled, all: all, build: BUILD })
 }
 

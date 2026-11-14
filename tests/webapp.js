@@ -165,7 +165,7 @@ test('Service Worker 只缓存同源 GET，API 的 POST 直连网络', () => {
 test('小程序「我的」页含同步口令卡片且 handler 齐全', () => {
   const wxml = read(path.join(ROOT, 'pages/mine/mine.wxml'))
   const js = read(path.join(ROOT, 'pages/mine/mine.js'))
-  assert.ok(wxml.includes('网页 / 电脑端同步'))
+  assert.ok(wxml.includes('网页 / 电脑端同步') || wxml.includes('T.mp_sync_card'))
   assert.ok(wxml.includes('onSyncGenerate') && wxml.includes('onSyncRevoke'))
   assert.ok(js.includes('onSyncGenerate') && js.includes('onSyncRevoke'))
   assert.ok(js.includes("action: 'createBinding'"))
@@ -250,7 +250,7 @@ test('登录前端：回调页 / 已配置才渲染按钮 / 关联引导 / SW �
   assert.ok(cb.includes('sessionStorage') && cb.includes("'oauthCallback'"))
   assert.ok(cb.includes('kiwi_web_token'), '回调页必须写入 token')
   assert.ok(cb.includes("params.get('state') !== saved.state"), '回调页必须校验 state')
-  assert.ok(html.includes('v-if="providers.length"'), '未配置平台不能渲染按钮')
+  assert.ok(html.includes('v-if="visibleProviders.length"'), '未配置平台不能渲染按钮')
   assert.ok(html.includes('showProviderStatus'), '缺账号接入状态清单')
   assert.ok(html.includes('account.needsLink'), '缺关联小程序引导条')
   const js = read(path.join(WEB, 'app.js'))
@@ -262,7 +262,7 @@ test('登录前端：回调页 / 已配置才渲染按钮 / 关联引导 / SW �
   const sw = read(path.join(WEB, 'sw.js'))
   assert.ok(sw.includes("url.pathname.indexOf('oauth-callback.html') >= 0"),
     '带 code/state 的回调页绝不能进离线缓存')
-  assert.ok(sw.includes("'kiwi-web-v3'"), 'SW 缓存版本未升级，老设备会吃到旧资源')
+  assert.ok(sw.includes("'kiwi-web-v4'"), 'SW 缓存版本未升级，老设备会吃到旧资源')
 })
 
 console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败')

@@ -187,8 +187,9 @@ PC 专属能力：标题/备注搜索、侧栏计数与「下一次提醒」、�
 ```bash
 node tests/webapi.js     # 24 项：口令/token/CRUD/白名单/游标/幂等/归属
 node tests/webapp.js     # 18 项：模板编译/资源齐全/共享模块 md5/PWA 清单/登录链路
-node tests/oauth.js      # 31 项：五平台适配器/state 签名/PKCE/账号合并/未关联拦截
-for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 16 个套件
+node tests/oauth.js      # 34 项：八平台适配器/state 签名/PKCE/账号合并/未关联拦截
+node tests/i18n.js       # 19 项：11 语言字典/语言→地区→节假日联动/多副本 md5
+for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 17 个套件
 ```
 
 `tests/webapp.js` 会用 Vue 自带编译器在 Node 里把 `index.html` 的模板真编译一遍，
@@ -202,13 +203,15 @@ for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 
 
 这一节是**可选增强**：不做也不影响 A–H 的同步口令方案。做完之后，网页三端
 （PC / 安卓 / iOS）可以用 Google、Apple、GitHub、X、微信网页扫码登录，
-登录后与小程序共用同一份待办。
+以及按所选语言/地区出现的当地账号（日本語→LINE、한국어→Kakao / Naver），
+登录后与小程序共用同一份待办。全球通用平台任何语言都显示，当地平台只在
+对应地区显示；详见 J 节。
 
 ### I-1 设计原则：不留假按钮
 
 凭证全部放在**云函数环境变量**里。`oauthProviders` 只返回「已配齐凭证」的平台，
 网页端只渲染这些按钮；没配的平台在「账号接入状态」清单里列出还缺哪些变量名，
-不会显示一个点了没反应的按钮。**当前默认 5 个全部未配置 = 登录页只有同步口令框**，
+不会显示一个点了没反应的按钮。**当前默认 8 个全部未配置 = 登录页只有同步口令框**，
 与之前完全一致。
 
 ### I-2 环境变量（云开发控制台 → 云函数 `webapi` → 配置 → 环境变量）
@@ -220,12 +223,15 @@ for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 
 | Apple | `APPLE_CLIENT_ID`（Services ID）、`APPLE_TEAM_ID`、`APPLE_KEY_ID`、`APPLE_PRIVATE_KEY` | `.p8` 私钥全文，换行用 `\n` 写进一行值；云函数现签 ES256 client_secret |
 | X | `X_CLIENT_ID`、`X_CLIENT_SECRET` | App 类型选 Web App，强制 PKCE |
 | 微信网页 | `WECHAT_WEB_APPID`、`WECHAT_WEB_SECRET` | 微信开放平台「网站应用」，需认证 + 已备案域名 |
+| LINE（日本） | `LINE_CLIENT_ID`、`LINE_CLIENT_SECRET` | LINE Developers → LINE Login Channel；回调填 I-3 地址；scope `profile openid`，`regions: ['jp']` |
+| Kakao（韩国） | `KAKAO_CLIENT_ID`、`KAKAO_CLIENT_SECRET` | Kakao Developers → 应用 → Kakao Login → Redirect URI；需开启「Client Secret」；用户标识取 `/v2/user/me` 的 `id` |
+| Naver（韩国） | `NAVER_CLIENT_ID`、`NAVER_CLIENT_SECRET` | Naver Developers → 应用 → API 设置 → Callback URL；响应包一层 `response`，换 token 要原样回传 `state` |
 | 通用（强烈建议） | `OAUTH_STATE_SECRET` | 一串随机长字符串，给登录 state 做 HMAC 签名；不配也能跑（从环境派生），但正式上线务必配 |
 
 > ⚠️ 变量名大小写必须完全一致。改完环境变量要**重新部署或重启 `webapi`** 才生效。
 > 任何一个平台缺变量，该平台就自动禁用，不影响其它平台。
 
-### I-3 回调地址（五个平台后台都填这一个）
+### I-3 回调地址（八个平台后台都填这一个）
 
 ```
 https://<你的静态托管域名>/oauth-callback.html
@@ -248,6 +254,9 @@ https://<你的静态托管域名>/oauth-callback.html
 | Apple | Apple Developer → Certificates, Identifiers & Profiles → Identifiers (Services ID) + Keys | Services ID 勾选 Sign in with Apple 并绑定域名与回调；新建 .p8 Key 记下 Key ID / Team ID（Team ID 在 Membership 页） |
 | X | developer.x.com → Project / App → User authentication settings | App type = **Web App**；Callback URL / Redirect URI 填 I-3 地址；勾选 `users.read`（代码还会请求 `tweet.read offline.access`） |
 | 微信 | 微信开放平台 → 网站应用（不是小程序！） | 需企业/个体认证 + 已备案域名；「授权回调域」填 I-3 地址的域名部分（不带路径） |
+| LINE | LINE Developers → Providers → Create a LINE Login channel | App type = Web app；Callback URL 填 I-3 地址；`openid` scope 需勾选 |
+| Kakao | Kakao Developers → 我的应用 → 产品设置 → Kakao Login | 激活 Kakao Login、填 Redirect URI；在「安全」里生成并启用 Client Secret |
+| Naver | Naver Developers → Application → 应用注册 | 使用 API 选「네이버 로그인」，Callback URL 填 I-3 地址；服务 URL 要与静态托管同源 |
 
 > 微信开放平台网页登录拿到的是 `unionid/openid`，**不等于小程序 openid**，
 > 所以登录后仍要填一次小程序同步口令完成数据合并，这是刻意设计，不是缺陷。
@@ -265,13 +274,13 @@ https://<你的静态托管域名>/oauth-callback.html
 
 ### I-6 验收顺序
 
-1. 不配任何环境变量 → 登录页只有同步口令框；展开「账号接入状态」应看到 5 个平台都标
+1. 不配任何环境变量 → 登录页只有同步口令框；展开「账号接入状态」应看到 8 个平台都标
    「未配置：…」，且不出现任何第三方按钮。
 2. 只配 GitHub 两组变量并重部署 `webapi` → 刷新登录页，应只出现 GitHub 一个按钮。
 3. 点 GitHub → 授权 → 自动跳回 → 出现「关联微信小程序」引导条。
 4. 填小程序 8 位口令 → 引导条消失，待办列表出现，与小程序一致。
 5. 网页端新建一条 2 分钟后的待办 → 到点应收到**微信订阅消息**（pusher 照常工作）。
-6. 云函数日志里 `webapi 版本 2026-11-13b` 说明跑的是新包；看不到就是没重新部署。
+6. 云函数日志里 `webapi 版本 2026-11-13c` 说明跑的是新包；看不到就是没重新部署。
 
 ### I-7 安全边界
 
@@ -281,3 +290,76 @@ https://<你的静态托管域名>/oauth-callback.html
 - `users` / `identities` / `web_bindings` 必须「仅管理端可读写」；
 - token 30 天有效，小程序「作废口令」立即让所有**口令绑定**会话失效；
   第三方会话可在网页端点「退出」清本地（云端会话过期后自然失效）。
+
+---
+
+## J. 多语言 / 当地节假日 / 当地社交登录（2026-11-14 新增）
+
+### J-1 覆盖范围
+
+界面覆盖苹果「实时翻译」的 **11 种语言**，每种语言绑定一个地区：
+
+| 语言 | 地区 | 语言 | 地区 |
+|---|---|---|---|
+| 简体中文 / 繁體中文 | 中国大陆 `cn` | English (US) | 美国 `us` |
+| English (UK) | 英国 `gb` | 日本語 | 日本 `jp` |
+| 한국어 | 韩国 `kr` | Deutsch | 德国 `de` |
+| Français | 法国 `fr` | Español | 西班牙 `es` |
+| Italiano | 意大利 `it` | Português (Brasil) | 巴西 `br` |
+
+- **网页/PWA**：登录页、主界面顶部、桌面侧栏共 3 处语言选择器；选择存
+  `localStorage.kiwi_web_lang`，首次访问按浏览器语言自动选；OAuth 回调页与
+  Service Worker 缓存版本（`kiwi-web-v4`）同步。
+- **小程序**：「我的」页新增「语言 / Language」卡片（11 项 picker），选择存
+  `wx.Storage.kiwi_lang`；自定义 tabBar、待办页、提醒记录页、节假日维护页、
+  我的页的主要可见文案与 toast 均已走字典。编辑页 / 邀请页等二级页仍有部分中文，
+  如需 100% 覆盖可继续补。
+- 字典文件 `i18n.js` / `i18n-extra.js` / `holidays-region.js` 在 `webapp/` 与
+  `utils/` 各有一份，`tests/i18n.js` 会校验 md5 一致，防止两端翻译口径漂移。
+
+### J-2 切换语言 = 切换当地法定节假日（本次重点）
+
+`webapp/holidays-region.js` 内置 10 个地区 2027 年官方假日（日本祝日含振替休日、
+韩国公休日含대체공휴일、美国联邦假日含 observed 补休、英德法意西巴法定假日等）。
+
+- 网页端 `app.js` 的 `buildHolidayMap(region)` 按当前语言的 region 取表，
+  `setLang()` 立即重建响应式的 `holidayMap`，「下一次提醒」与卡片上的下次提醒
+  预览随之重算（`core.nextOccurrence` 用新表）。
+- 小程序 `app.setLang()` 会把 `holidaysLoaded` 置 false 并清空 `holidayMap`，
+  首页 / 节假日页按 `store.regionSeed(region)` 重建；页面顶部显示「当前按 XX
+  官方节假日显示」。
+- **非中国大陆地区只读**：只展示本地地区表，**不读取、不回灌、不删除云端
+  `holidays` 集合**。那是一张公共表、存的是中国大陆口径；若切语言就写回，
+  会把所有用户的节假日表写脏。切回简体中文即恢复可自行维护。
+- 中国大陆地区（默认）行为与改造前完全一致：官方 2027 表（含调休补班
+  `workday`）+ 云端覆盖 + 用户排除集，原有回灌/编辑/删除逻辑一行未改。
+
+> ⚠️ **必须知道的限制**：真正的「到点推送」由云端 `pusher` 每分钟扫描并下发
+> 微信订阅消息，它仍按**中国大陆官方节假日表**判断是否跳过。本次为了不动
+> 提醒链路（reminder-core 5 份副本、pusher / pushapi 零改动），语言与地区
+> 影响的是**端上的显示与「下次提醒」预览**，不会改变云端实际下发日期。
+> 若要让云端也按用户所在地区跳过，需要把 region 写进待办/用户配置并让
+> pusher 按人取表，属于后续独立改造。
+
+### J-3 当地社交登录
+
+`cloudfunctions/webapi/oauth.js` 现为 8 个平台，每个带 `regions` 字段：
+
+- 全球通用（regions 为空）：GitHub / Google / Apple / X —— 任何语言都显示；
+- 微信网页（cn）、LINE（jp）、Kakao / Naver（kr）—— 只在对应地区显示；
+- `oauthProviders` 会把 `regions` 一起下发，前端 `visibleProviders` 按当前
+  region 过滤；未配凭证的平台依旧自动隐藏，绝不留假按钮；
+- 三个新平台的注册清单见 I-2 / I-4，回调地址统一用 I-3 那一个。
+
+### J-4 部署与验收
+
+1. 重新「上传并部署」`webapi` 云函数（BUILD 应为 `2026-11-13c`）；
+   `pusher` / `pushapi` **不用动**。
+2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**（含新增的
+   `i18n.js` / `i18n-extra.js` / `holidays-region.js`）重新上传到静态托管；
+   Service Worker 已升 v4，老设备刷新两次会拿到新资源。
+3. 小程序重新编译上传（新增 `utils/i18n*.js`、`utils/holidays-region.js`）。
+4. 验收：切到日本語 → 界面变日文、侧栏显示「日本」、节假日页出现
+   `2027-02-23 天皇誕生日` 而不再有中国春节调休；登录页若配了 LINE 凭证
+   应出现 LINE 按钮，切回简体中文则显示微信网页登录按钮。
+5. 本地跑 `node tests/i18n.js`，19 项全绿才说明联动没回退。

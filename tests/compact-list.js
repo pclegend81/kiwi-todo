@@ -71,9 +71,9 @@ async function main() {
   check('原来的两行标签已并成一行，且允许折行不挤变形', () => {
     const tags = wxml.slice(wxml.indexOf('class="row todo-tags"'), wxml.indexOf('todo-divider'))
     assert.ok(/priority-\{\{item\.priority\}\}/.test(tags))
-    assert.ok(/待确认完成/.test(tags))
-    assert.ok(/协作/.test(tags))
-    assert.ok(/附件/.test(tags))
+    assert.ok(/待确认完成|T\.mp_idx_pending/.test(tags), '待确认标签需保留（中文或字典键）')
+    assert.ok(/协作|T\.idx_shared/.test(tags))
+    assert.ok(/附件|T\.idx_attach/.test(tags))
     assert.ok(/item\.skipHolidayText/.test(tags), '节假日标签必须并进同一行')
     assert.ok(!/class="divider"/.test(wxml.slice(wxml.indexOf('wx:for="{{activeList}}"'))))
     assert.ok(/\.todo-tags\s*\{[^}]*flex-wrap:\s*wrap/.test(wxss))

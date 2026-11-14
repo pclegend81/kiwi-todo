@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>KIWI待办 · 登录中</title>
+<title>KIWI待办</title>
 <meta name="robots" content="noindex,nofollow">
 <style>
   * { box-sizing: border-box; }
@@ -24,10 +24,23 @@
 <body>
 <div class="card">
   <div class="logo">K</div>
-  <h1 id="title">正在完成登录…</h1>
-  <p id="msg">正在与云端校验授权结果，请不要关闭页面。</p>
-  <a id="back" class="btn" href="index.html" hidden>返回登录</a>
+  <h1 id="title"></h1>
+  <p id="msg"></p>
+  <a id="back" class="btn" href="index.html" hidden></a>
 </div>
+<!-- 字典与 index.html 同源同版；回调页本身不进 SW 缓存，这里直接加载即可 -->
+<script>var module = { exports: {} }; var exports = module.exports;</script>
+<script src="i18n.js"></script>
+<script>
+  window.KIWI_CB_BASE = module.exports.I18N;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="i18n-extra.js"></script>
+<script>
+  window.KIWI_CB_EXTRA = module.exports.EXTRA;
+  window.KIWI_CB_CODES = module.exports.CODES;
+  delete window.module; delete window.exports;
+</script>
 <script>
 ;(function () {
   'use strict'
@@ -35,6 +48,32 @@
   var API_KEY = 'kiwi_web_api'
   var TOKEN_KEY = 'kiwi_web_token'
   var SS_KEY = 'kiwi_oauth'
+  var LANG_KEY = 'kiwi_web_lang'
+
+  /** 与主界面共用 localStorage 里的语言选择；字典与 index.html 完全一致 */
+  var BASE = window.KIWI_CB_BASE || {}
+  var EXTRA = window.KIWI_CB_EXTRA || {}
+  var CODES = window.KIWI_CB_CODES || []
+  function pickLang() {
+    var saved = lsGet(LANG_KEY)
+    if (CODES.indexOf(saved) >= 0) return saved
+    var nav = String((navigator.language || '').toLowerCase()).replace(/_/g, '-')
+    var map = {
+      'zh-tw': 'zh-TW', 'zh-hk': 'zh-TW', 'en-gb': 'en-GB', 'en-us': 'en-US',
+      'ja': 'ja', 'ko': 'ko', 'de': 'de', 'fr': 'fr', 'es': 'es', 'it': 'it', 'pt-br': 'pt-BR',
+    }
+    return map[nav] || map[nav.slice(0, 2)] || 'zh-CN'
+  }
+  var lang = pickLang()
+  function t(key, vars) {
+    var d = Object.assign({}, BASE[lang] || {})
+    Object.keys(EXTRA).forEach(function (k) {
+      d[k] = (EXTRA[k] && EXTRA[k][lang]) || (EXTRA[k] && EXTRA[k]['zh-CN']) || k
+    })
+    var out = d[key] === undefined ? ((BASE['zh-CN'] || {})[key] || key) : d[key]
+    var v = vars || {}
+    return String(out).replace(/\{(\w+)\}/g, function (m, k) { return v[k] === undefined ? m : String(v[k]) })
+  }
 
   function lsGet(k) { try { return localStorage.getItem(k) || '' } catch (e) { return '' } }
   function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) {} }
@@ -42,7 +81,7 @@
   function ssDel(k) { try { sessionStorage.removeItem(k) } catch (e) {} }
 
   function showError(msg) {
-    $('title').textContent = '登录未完成'
+    $('title').textContent = t('cb_fail_title')
     $('title').className = 'err'
     $('msg').textContent = msg
     $('back').hidden = false
@@ -56,49 +95,54 @@
     }).then(function (res) {
       return res.text().then(function (text) {
         var data
-        try { data = JSON.parse(text) } catch (e) { throw new Error('接口返回异常（HTTP ' + res.status + '）') }
+        try { data = JSON.parse(text) } catch (e) { throw new Error(t('cb_api_bad', { n: res.status })) }
         // 未开启集成响应时，整个 {statusCode, headers, body} 会被当 JSON 返回
         if (data && typeof data.statusCode === 'number' && typeof data.body === 'string') {
           try { data = JSON.parse(data.body) } catch (e) {}
         }
-        if (!data || !data.ok) throw new Error((data && data.message) || '云端校验未通过')
+        if (!data || !data.ok) throw new Error((data && data.message) || t('cb_cloud_fail'))
         return data
       })
     })
   }
 
   function run() {
+    document.documentElement.lang = lang
+    document.title = t('cb_title')
+    $('title').textContent = t('cb_loading')
+    $('msg').textContent = t('cb_checking')
+    $('back').textContent = t('cb_back')
     var params = new URLSearchParams(location.search)
     var apiUrl = lsGet(API_KEY)
     var saved
     try { saved = JSON.parse(ssGet(SS_KEY) || 'null') } catch (e) { saved = null }
 
     if (params.get('error')) {
-      showError('授权被取消或平台返回错误：' + params.get('error'))
+      showError(t('cb_cancelled', { err: params.get('error') }))
       return
     }
     if (!apiUrl) {
-      showError('尚未配置接口地址。请先回到登录页填写 webapi 地址，再重新发起登录。')
+      showError(t('cb_no_api'))
       return
     }
     if (!saved || !saved.state || !saved.provider) {
-      showError('登录状态已丢失（可能换了浏览器或无痕模式），请重新发起登录。')
+      showError(t('cb_no_state'))
       return
     }
     if (!params.get('code')) {
-      showError('平台没有返回授权码，请重新发起登录。')
+      showError(t('cb_no_code'))
       return
     }
     if (params.get('state') !== saved.state) {
-      showError('登录状态校验失败，为防止账号被冒用已中止，请重新发起登录。')
+      showError(t('cb_bad_state'))
       return
     }
     if (!saved.at || Date.now() - saved.at > 10 * 60000) {
-      showError('登录已超时（10 分钟），请重新发起登录。')
+      showError(t('cb_timeout'))
       return
     }
 
-    $('msg').textContent = '授权成功，正在建立 KIWI 账号…'
+    $('msg').textContent = t('cb_building')
     callApi(apiUrl, 'oauthCallback', {
       provider: saved.provider,
       code: params.get('code'),
@@ -108,13 +152,13 @@
     }).then(function (res) {
       lsSet(TOKEN_KEY, res.token)
       ssDel(SS_KEY)
-      $('title').textContent = res.linked ? '登录成功' : '登录成功，还差一步'
+      $('title').textContent = res.linked ? t('cb_ok') : t('cb_need_link')
       $('msg').textContent = res.linked
-        ? '正在打开你的待办…'
-        : '回到页面后输入小程序里的 8 位同步口令，即可与微信数据合并。'
+        ? t('cb_opening')
+        : t('cb_link_hint')
       location.replace('index.html?login=oauth')
     }).catch(function (e) {
-      showError(e.message || '云端校验失败，请重新发起登录。')
+      showError(e.message || t('cb_cloud_fail'))
     })
   }
 

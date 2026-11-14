@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="theme-color" content="#007aff">
-<title>KIWI待办 · 桌面版 / 网页版</title>
+<title>KIWI待办</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -283,6 +283,14 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
   ::-webkit-scrollbar-track { background: transparent; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 }
+  /* 语言选择：11 种苹果实时翻译语言，切换后节假日按地区重建 */
+  .lang-select {
+    font-size:13px; font-family:inherit; padding:6px 8px; max-width:100%;
+    border:1px solid #dfe2e8; border-radius:8px; background:#fff; color:var(--text);
+  }
+  .lang-row { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:12px; }
+  .lang-row .lang-select { flex:1; min-width:0; }
+  .side-panel .lang-select { width:100%; font-size:13px; }
 </style>
 </head>
 <body>
@@ -292,68 +300,75 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
     <div class="login-wrap">
       <div class="login-brand">
         <div class="brand-logo">K</div>
-        <div class="brand-title">KIWI待办</div>
-        <div class="brand-sub">网页 / 电脑端 · 与微信小程序实时同步</div>
+        <div class="brand-title">{{ $t('app_name') }}</div>
+        <div class="brand-sub">{{ $t('brand_sub') }}</div>
         <ul class="brand-features">
-          <li><span class="dot"></span><span>同一份云端数据：电脑、手机、小程序三端互相同步</span></li>
-          <li><span class="dot"></span><span>13 种重复规则与中国大陆法定节假日智能顺延 / 跳过</span></li>
-          <li><span class="dot"></span><span>网页端创建的待办，照常由微信订阅消息推送到手机</span></li>
+          <li><span class="dot"></span><span>{{ $t('feat1') }}</span></li>
+          <li><span class="dot"></span><span>{{ $t('feat2') }}</span></li>
+          <li><span class="dot"></span><span>{{ $t('feat3') }}</span></li>
         </ul>
       </div>
       <div>
         <div class="page-header">
-          <div class="page-title">KIWI待办</div>
-          <div class="page-subtitle">网页版 · 与微信小程序互相同步</div>
+          <div class="page-title">{{ $t('app_name') }}</div>
+          <div class="page-subtitle">{{ $t('page_sub') }}</div>
         </div>
         <div class="card login-card">
-          <div class="title">输入同步口令</div>
-          <div class="small muted" style="margin-top:6px">
-            打开微信小程序 KIWI待办 → 「我的」→ 「网页 / 电脑端同步」→ 生成同步口令，把 8 位口令填到这里。
+          <div class="lang-row">
+            <span class="small muted">{{ $t('lang') }}</span>
+            <select class="lang-select" :value="lang" @change="setLang($event.target.value)">
+            <option v-for="l in langList" :key="l.code" :value="l.code">{{ l.label }}</option>
+          </select>
           </div>
-          <label>同步口令（8 位，不含 0/O/1/I/L）</label>
-          <input v-model.trim="codeInput" maxlength="8" placeholder="如 AB23CD45"
+          <div class="small muted" style="margin-bottom:8px">{{ $t('lang_hint') }}</div>
+          <div class="title">{{ $t('card_title') }}</div>
+          <div class="small muted" style="margin-top:6px">
+            {{ $t('howto') }}
+          </div>
+          <label>{{ $t('code_label') }}</label>
+          <input v-model.trim="codeInput" maxlength="8" :placeholder="$t('code_ph')"
                  style="font-size:22px;letter-spacing:6px;text-align:center;font-weight:700"
                  @keyup.enter="bind">
           <button class="btn" style="margin-top:16px" :disabled="!codeInput || busy" @click="bind">
-            {{ busy ? '绑定中…' : '绑定并同步' }}
+            {{ busy ? $t('binding') : $t('bind') }}
           </button>
           <div class="small muted" style="margin-top:10px">
-            口令绑定后本设备 30 天内免输入；可在小程序里随时「作废口令」。
+            {{ $t('bind_note') }}
           </div>
 
-          <div v-if="providers.length" class="oauth-sep"><span>或使用第三方账号登录</span></div>
-          <div v-if="providers.length" class="oauth-btns">
-            <button v-for="p in providers" :key="p.id" class="oauth-btn"
+          <div v-if="visibleProviders.length" class="oauth-sep"><span>{{ $t('oauth_sep') }}</span></div>
+          <div v-if="visibleProviders.length" class="oauth-btns">
+            <button v-for="p in visibleProviders" :key="p.id" class="oauth-btn"
                     :disabled="busy" @click="oauthLogin(p)">
               <span class="oauth-mark">{{ providerMark(p.id) }}</span>{{ p.name }}
             </button>
           </div>
-          <div v-if="providers.length" class="small muted" style="margin-top:8px">
-            首次登录后需再输入一次小程序同步口令，即可与微信里的数据合并为同一份待办。
+          <div v-if="visibleProviders.length" class="small muted" style="margin-top:8px">
+            {{ $t('oauth_hint') }}
           </div>
           <div style="margin-top:12px">
             <span class="link small" @click="showProviderStatus=!showProviderStatus">
-              账号接入状态（共 {{ allProviders.length }} 个平台）
+              {{ $t('status_link', { n: allProviders.length }) }}
             </span>
             <div v-if="showProviderStatus" class="provider-status">
               <div v-for="p in allProviders" :key="p.id" class="provider-row">
                 <span>{{ p.name }}</span>
                 <span :class="p.enabled ? 'ok' : 'off'">
-                  {{ p.enabled ? '已接入' : '未配置：' + p.missing.join('、') }}
+                  {{ p.enabled ? $t('status_on') : $t('status_off', { vars: p.missing.join('、') }) }}
                 </span>
               </div>
               <div class="small muted" style="margin-top:6px">
-                未配置的平台不会显示登录按钮；在云函数环境变量里补齐凭证后自动出现。
+                {{ $t('status_note') }}
               </div>
             </div>
           </div>
 
           <div style="margin-top:14px">
-            <span class="link small" @click="showApi=!showApi">接口地址设置（部署时填一次）</span>
+            <span class="link small" @click="showApi=!showApi">{{ $t('api_link') }}</span>
             <div v-if="showApi || !apiUrl" style="margin-top:8px">
               <input v-model.trim="apiUrl" placeholder="https://xxx.service.tcloudbase.com/webapi">
               <div class="small muted" style="margin-top:6px">
-                填云开发「HTTP 访问服务」里 webapi 的完整地址。首次部署时必填，之后本设备自动记住。
+                {{ $t('api_hint') }}
               </div>
             </div>
           </div>
@@ -366,29 +381,31 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
   <template v-else>
     <div class="page-header row-between">
       <div>
-        <div class="page-title">KIWI待办</div>
+        <div class="page-title">{{ $t('app_name') }}</div>
         <div class="page-subtitle">
-          已同步 · {{ todos.length }} 条
-          <span class="only-desktop inline"> · 上次同步 {{ lastSyncText || '—' }}</span>
+          {{ $t('synced', { n: todos.length }) }}
+          <span class="only-desktop inline"> · {{ $t('last_sync') }} {{ lastSyncText || '—' }}</span>
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn only-desktop" @click="openNew">＋ 新建待办 <kbd>N</kbd></button>
-        <span class="link small" @click="unbind">退出</span>
+        <select class="lang-select" :value="lang" @change="setLang($event.target.value)">
+          <option v-for="l in langList" :key="l.code" :value="l.code">{{ l.label }}</option>
+        </select>
+        <button class="btn only-desktop" @click="openNew">{{ $t('new_todo') }} <kbd>N</kbd></button>
+        <span class="link small" @click="unbind">{{ $t('logout') }}</span>
       </div>
     </div>
 
     <!-- 第三方账号已登录但还没关联小程序：显式引导，避免「登录了却看不到数据」 -->
     <div v-if="account && account.needsLink" class="card link-banner">
-      <div class="title">关联微信小程序，打通全部待办</div>
+      <div class="title">{{ $t('link_title') }}</div>
       <div class="small muted" style="margin-top:6px">
-        当前使用 {{ providerName(account.provider) }} 登录。输入小程序「我的 → 网页 / 电脑端同步」
-        里的 8 位口令，这个账号就能读写同一份云端数据，并继续由微信订阅消息准时提醒。
+        {{ $t('link_desc', { provider: providerName(account.provider) }) }}
       </div>
       <div class="link-form">
-        <input v-model.trim="linkCode" maxlength="8" placeholder="8 位同步口令"
+        <input v-model.trim="linkCode" maxlength="8" :placeholder="$t('link_ph')"
                style="font-size:18px" @keyup.enter="linkWechat">
-        <button class="btn" :disabled="!linkCode || busy" @click="linkWechat">关联并同步</button>
+        <button class="btn" :disabled="!linkCode || busy" @click="linkWechat">{{ $t('link_btn') }}</button>
       </div>
     </div>
 
@@ -396,86 +413,95 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
       <!-- 桌面侧栏 -->
       <aside class="side-col">
         <div class="side-group">
-          <div class="side-label">视图</div>
+          <div class="side-label">{{ $t('view') }}</div>
           <div class="nav-item" :class="{active: filter==='active'}" @click="setFilter('active')">
-            <span>进行中</span><span class="nav-count">{{ countActive }}</span>
+            <span>{{ $t('f_active') }}</span><span class="nav-count">{{ countActive }}</span>
           </div>
           <div class="nav-item" :class="{active: filter==='done'}" @click="setFilter('done')">
-            <span>已完成</span><span class="nav-count">{{ countDone }}</span>
+            <span>{{ $t('f_done') }}</span><span class="nav-count">{{ countDone }}</span>
           </div>
           <div class="nav-item" :class="{active: filter==='all'}" @click="setFilter('all')">
-            <span>全部待办</span><span class="nav-count">{{ todos.length }}</span>
+            <span>{{ $t('f_all') }}</span><span class="nav-count">{{ todos.length }}</span>
           </div>
         </div>
         <div class="side-group">
-          <div class="side-label">快捷操作</div>
-          <div class="nav-item" @click="openNew">＋ 新建待办</div>
-          <div class="nav-item" @click="refresh">↻ 立即同步</div>
+          <div class="side-label">{{ $t('quick') }}</div>
+          <div class="nav-item" @click="openNew">{{ $t('new_todo') }}</div>
+          <div class="nav-item" @click="refresh">{{ $t('sync_now') }}</div>
         </div>
         <div class="side-panel">
-          <div class="sp-label">下一次提醒</div>
+          <div class="sp-label">{{ $t('next_remind') }}</div>
           <div class="sp-value">{{ nextUpcoming }}</div>
         </div>
         <div class="side-panel">
-          <div class="sp-label">自动同步</div>
-          <div class="sp-value" style="color:#41464f;font-size:14px">每 20 秒 · {{ lastSyncText || '尚未同步' }}</div>
+          <div class="sp-label">{{ $t('auto_sync') }}</div>
+          <div class="sp-value" style="color:#41464f;font-size:14px">{{ $t('every20s') }} · {{ lastSyncText || $t('not_synced') }}</div>
+        </div>
+        <div class="side-panel">
+          <div class="sp-label">{{ $t('lang') }}</div>
+          <div class="sp-value">
+            <select class="lang-select" :value="lang" @change="setLang($event.target.value)">
+            <option v-for="l in langList" :key="l.code" :value="l.code">{{ l.label }}</option>
+          </select>
+          </div>
+          <div class="small muted" style="margin-top:8px">{{ $t('holiday_from', { name: regionName }) }}</div>
+          <div class="small muted" style="margin-top:4px">{{ $t('lang_hint') }}</div>
         </div>
         <div class="side-note">
-          快捷键：<kbd>N</kbd> 新建 · <kbd>/</kbd> 搜索 · <kbd>R</kbd> 刷新 ·
-          <kbd>Esc</kbd> 关闭 · <kbd>Ctrl/⌘ + Enter</kbd> 保存<br><br>
-          到点提醒仍由微信订阅消息推送，网页端只在页面打开时弹浏览器通知。
+          {{ $t('k_hint') }}<br><br>
+          {{ $t('push_note') }}
         </div>
       </aside>
 
       <!-- 右侧主内容 -->
       <main class="main-col">
         <div class="card new-bar only-mobile" style="padding:12px 16px">
-          <button class="btn" @click="openNew">＋ 新建待办</button>
+          <button class="btn" @click="openNew">{{ $t('new_todo') }}</button>
         </div>
 
         <div class="tabs">
-          <span class="chip only-mobile" :class="{on: filter==='active'}" @click="setFilter('active')">进行中</span>
-          <span class="chip only-mobile" :class="{on: filter==='done'}" @click="setFilter('done')">已完成</span>
-          <span class="chip only-mobile" :class="{on: filter==='all'}" @click="setFilter('all')">全部</span>
-          <input class="search-input only-desktop" v-model.trim="query" placeholder="搜索标题 / 备注    按 / 聚焦">
-          <span class="toolbar-stat only-desktop inline">{{ visibleTodos.length }} 条结果</span>
+          <span class="chip only-mobile" :class="{on: filter==='active'}" @click="setFilter('active')">{{ $t('f_active') }}</span>
+          <span class="chip only-mobile" :class="{on: filter==='done'}" @click="setFilter('done')">{{ $t('f_done') }}</span>
+          <span class="chip only-mobile" :class="{on: filter==='all'}" @click="setFilter('all')">{{ $t('f_all_s') }}</span>
+          <input class="search-input only-desktop" v-model.trim="query" :placeholder="$t('search_ph')">
+          <span class="toolbar-stat only-desktop inline">{{ $t('results', { n: visibleTodos.length }) }}</span>
           <span class="toolbar-spacer"></span>
-          <span class="chip" @click="refresh" v-if="!refreshing">刷新</span>
-          <span class="chip on" v-else>刷新中…</span>
+          <span class="chip" @click="refresh" v-if="!refreshing">{{ $t('refresh') }}</span>
+          <span class="chip on" v-else>{{ $t('refreshing') }}</span>
         </div>
 
         <div class="todo-list">
           <div class="card todo-card" v-for="t in visibleTodos" :key="t.id">
             <div class="row-between">
-              <span class="todo-title" :class="{'chip-done': t.status==='done'}">{{ t.title || '（无标题）' }}</span>
-              <span class="tag" :class="'tag-'+t.priority">{{ priorityText(t.priority) }}优先级</span>
+              <span class="todo-title" :class="{'chip-done': t.status==='done'}">{{ t.title || $t('no_title') }}</span>
+              <span class="tag" :class="'tag-'+t.priority">{{ priorityText(t.priority) }}{{ $t('prio_suffix') }}</span>
             </div>
             <div class="todo-note" v-if="t.note">{{ t.note }}</div>
             <div class="todo-meta">
               <span class="tag">{{ repeatText(t) }}</span>
-              <span class="tag" v-if="t.skip_holiday">跳过节假日</span>
-              <span class="tag tag-warn" v-if="t.status==='done' && t.manual_done">手工完成</span>
-              <span class="tag tag-done" v-if="t.created_from==='web'">来自网页</span>
+              <span class="tag" v-if="t.skip_holiday">{{ $t('skip_tag') }}</span>
+              <span class="tag tag-warn" v-if="t.status==='done' && t.manual_done">{{ $t('manual_tag') }}</span>
+              <span class="tag tag-done" v-if="t.created_from==='web'">{{ $t('web_tag') }}</span>
             </div>
-            <div class="todo-next" v-if="t.status==='active' && nextText(t)">下次提醒：{{ nextText(t) }}</div>
-            <div class="todo-next muted" v-if="t.status==='done'">已完成{{ t.done_at ? ' · ' + fmtTime(t.done_at) : '' }}</div>
+            <div class="todo-next" v-if="t.status==='active' && nextText(t)">{{ $t('next_prefix') }}{{ nextText(t) }}</div>
+            <div class="todo-next muted" v-if="t.status==='done'">{{ $t('done_prefix') }}{{ t.done_at ? ' · ' + fmtTime(t.done_at) : '' }}</div>
             <div class="todo-divider" v-if="t.status==='active'"></div>
             <div class="todo-actions" v-if="t.status==='active'">
-              <span class="chip" @click="done(t)">完成</span>
-              <span class="chip" @click="openEdit(t)">编辑</span>
-              <span class="chip" @click="remove(t)" style="color:var(--danger)">删除</span>
+              <span class="chip" @click="done(t)">{{ $t('act_done') }}</span>
+              <span class="chip" @click="openEdit(t)">{{ $t('act_edit') }}</span>
+              <span class="chip" @click="remove(t)" style="color:var(--danger)">{{ $t('act_delete') }}</span>
             </div>
           </div>
         </div>
 
         <div class="empty" v-if="!visibleTodos.length && !refreshing">
-          {{ query ? '没有匹配的待办' : (filter==='active' ? '没有进行中的待办' : '暂无待办') }}
+          {{ query ? $t('empty_search') : (filter==='active' ? $t('empty_active') : $t('empty_none')) }}
         </div>
 
         <div class="card small muted footer-note only-mobile" style="font-size:12px;line-height:1.7">
-          <div>三端使用：电脑浏览器直接打开本页；安卓 Chrome / iOS Safari 用浏览器菜单「添加到主屏幕」，即可全屏当 App 用。</div>
-          <div>数据每 20 秒自动同步一次；网页端新建的待办同样会由微信小程序推送服务下发微信提醒。</div>
-          <div v-if="lastSyncText">上次同步 {{ lastSyncText }}</div>
+          <div>{{ $t('footer1') }}</div>
+          <div>{{ $t('footer2') }}</div>
+          <div v-if="lastSyncText">{{ $t('last_sync') }} {{ lastSyncText }}</div>
         </div>
       </main>
     </div>
@@ -483,67 +509,67 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
     <!-- 新建/编辑弹层（桌面为两列表单） -->
     <div class="modal-mask" v-if="editing" @click.self="editing=null">
       <div class="modal">
-        <div class="title">{{ editing.id ? '编辑待办' : '新建待办' }}</div>
+        <div class="title">{{ editing.id ? $t('m_edit') : $t('m_new') }}</div>
         <div class="form-grid">
           <div class="field">
-            <label>标题</label>
-            <input v-model.trim="form.title" maxlength="60" placeholder="要提醒自己的事">
+            <label>{{ $t('f_title') }}</label>
+            <input v-model.trim="form.title" maxlength="60" :placeholder="$t('title_ph')">
           </div>
           <div class="field">
-            <label>首次提醒时间</label>
+            <label>{{ $t('f_time') }}</label>
             <input type="datetime-local" v-model="form.remindLocal">
           </div>
           <div class="field">
-            <label>重复方式</label>
+            <label>{{ $t('f_repeat') }}</label>
             <select v-model="form.repeat_type">
-              <option value="none">仅一次</option>
-              <option value="daily">每天</option>
-              <option value="weekly">每周</option>
-              <option value="monthly">每月</option>
-              <option value="yearly">每年</option>
-              <option value="workday">每工作日</option>
-              <option value="restday">每休息日</option>
-              <option value="hourly">每小时</option>
-              <option value="minutely">每分钟</option>
+              <option value="none">{{ $t('rep_none') }}</option>
+              <option value="daily">{{ $t('rep_daily') }}</option>
+              <option value="weekly">{{ $t('rep_weekly') }}</option>
+              <option value="monthly">{{ $t('rep_monthly') }}</option>
+              <option value="yearly">{{ $t('rep_yearly') }}</option>
+              <option value="workday">{{ $t('rep_workday') }}</option>
+              <option value="restday">{{ $t('rep_restday') }}</option>
+              <option value="hourly">{{ $t('rep_hourly') }}</option>
+              <option value="minutely">{{ $t('rep_minutely') }}</option>
             </select>
           </div>
           <div class="field" v-if="hasInterval">
-            <label>间隔（每 N 个{{ unitText }}）</label>
+            <label>{{ $t('f_interval', { unit: unitText }) }}</label>
             <input type="number" min="1" max="999" v-model.number="form.repeat_interval">
           </div>
           <div class="field field-full">
-            <label>备注（可选）</label>
-            <textarea v-model.trim="form.note" rows="2" maxlength="500" placeholder="补充说明"></textarea>
+            <label>{{ $t('f_note') }}</label>
+            <textarea v-model.trim="form.note" rows="2" maxlength="500" :placeholder="$t('note_ph')"></textarea>
           </div>
           <div class="switch-row field-full">
-            <span class="small">跳过法定节假日</span>
+            <span class="small">{{ $t('f_skip') }}</span>
             <span class="tgl"><input type="checkbox" v-model="form.skip_holiday"><span class="knob"></span></span>
           </div>
           <div class="switch-row field-full" v-if="form.skip_holiday">
-            <span class="small">遇节假日</span>
+            <span class="small">{{ $t('f_on_holiday') }}</span>
             <select v-model="form.holiday_action" style="width:180px">
-              <option value="skip">跳过不提醒</option>
-              <option value="postpone">顺延到下一工作日</option>
+              <option value="skip">{{ $t('h_skip') }}</option>
+              <option value="postpone">{{ $t('h_postpone') }}</option>
             </select>
           </div>
           <div class="switch-row field-full">
-            <span class="small">优先级</span>
+            <span class="small">{{ $t('f_prio') }}</span>
             <select v-model="form.priority" style="width:180px">
-              <option value="high">高</option>
-              <option value="medium">中</option>
-              <option value="low">低</option>
+              <option value="high">{{ $t('prio_high') }}</option>
+              <option value="medium">{{ $t('prio_medium') }}</option>
+              <option value="low">{{ $t('prio_low') }}</option>
             </select>
           </div>
           <div class="switch-row field-full">
-            <span class="small">需要手工确认完成</span>
+            <span class="small">{{ $t('f_manual') }}</span>
             <span class="tgl"><input type="checkbox" v-model="form.manual_done"><span class="knob"></span></span>
           </div>
         </div>
         <div class="modal-actions">
-          <span class="modal-hint only-desktop inline">Ctrl / ⌘ + Enter 保存 · Esc 关闭</span>
-          <button class="btn btn-ghost" @click="editing=null">取消</button>
+          <span class="modal-hint only-desktop inline">{{ $t('hint_keys') }}</span>
+          <button class="btn btn-ghost" @click="editing=null">{{ $t('cancel') }}</button>
           <button class="btn" :disabled="busy || !form.title || !form.remindLocal" @click="save">
-            {{ busy ? '保存中…' : '保存' }}
+            {{ busy ? $t('saving') : $t('save') }}
           </button>
         </div>
       </div>
@@ -567,6 +593,23 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
 <script src="holidays-2027.js"></script>
 <script>
   window.KIWI_HOLIDAYS = module.exports.HOLIDAYS_2027;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="holidays-region.js"></script>
+<script>
+  window.KIWI_REGION_HOLIDAYS = module.exports.HOLIDAYS_REGION;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="i18n.js"></script>
+<script>
+  window.KIWI_LANGS = module.exports.LANGS;
+  window.KIWI_LOCALES = module.exports.LOCALES;
+  window.KIWI_I18N = module.exports.I18N;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="i18n-extra.js"></script>
+<script>
+  window.KIWI_I18N_EXTRA = module.exports.EXTRA;
   delete window.module; delete window.exports;
 </script>
 <script src="app.js"></script>

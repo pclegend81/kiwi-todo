@@ -4,6 +4,9 @@ const core = require('../../utils/reminder-core')
 const subscribe = require('../../utils/subscribe')
 const navGuard = require('../../utils/nav-guard')
 const { onShareAppMessage, onShareTimeline } = require('../../utils/share')
+const i18n = require('../../utils/i18n')
+
+const t = (key, vars) => i18n.t(key, vars)
 
 const app = getApp()
 
@@ -52,7 +55,7 @@ Page({
   data: {
     signedIn: false,
     loading: false,
-    loginText: '微信一键登录',
+    loginText: t('mp_login_btn'),
     loginError: '',
     activeList: [],
     freshList: [],
@@ -78,8 +81,10 @@ Page({
   },
 
   onShow() {
+    this.applyLangTexts()
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 0 })
+      if (typeof this.getTabBar().applyLang === 'function') this.getTabBar().applyLang()
     }
     // 新建保存时自动写系统日历的结果（回调可能晚于返回首页，延迟再查一次）
     this.consumeCalendarNotice()
@@ -104,6 +109,37 @@ Page({
    * 日历 API 的回调可能比 navigateBack 晚，所以编辑页写了 globalData + storage 双份，
    * 这里读完就清，避免下次进首页重复弹。用 toast 而不是 modal，免得打断列表加载。
    */
+  /** 注入当前语言字典与筛选器文案；切语言后 app.setLang 会回调 onLangChanged */
+  applyLangTexts() {
+    i18n.applyPage(this)
+    this.setData({
+      loginText: t('mp_login_btn'),
+      priorityFilters: PRIORITY_FILTERS.map((f) => ({
+        key: f.key,
+        name: f.key === 'all' ? t('f_all_s') : t('prio_' + f.key),
+      })),
+    })
+    this.setData(this.langCountTexts())
+  },
+
+  /** 带数字的文案在 JS 里格式化（WXML 不能给 $t 传参） */
+  langCountTexts(selected) {
+    const n = Number(selected === undefined ? (this.data.selectedCount || 0) : selected)
+    const f = Number(this.data.freshCount || 0)
+    return {
+      selectedCountText: t('idx_selected', { n: n }),
+      batchDeleteText: n > 0 ? t('idx_batch_delete', { n: n }) : t('mp_idx_delete'),
+      batchConfirmText: n > 0 ? t('idx_batch_confirm', { n: n }) : t('act_done'),
+      freshTitleText: t('idx_fresh_title', { n: f }),
+    }
+  },
+
+  /** 语言变了：节假日表按新地区重建，今日标记/列表文案一起刷新 */
+  onLangChanged() {
+    this.applyLangTexts()
+    this.ensureHolidays().catch(() => {})
+  },
+
   consumeCalendarNotice() {
     let text = app.globalData.calendarNotice || ''
     if (!text) {
@@ -148,7 +184,7 @@ Page({
       await this.ensureHolidays()
       await this.refreshTodos()
     } catch (e) {
-      wx.showToast({ title: '加载失败，请下拉重试', icon: 'none' })
+      wx.showToast({ title: t('idx_fail_retry'), icon: 'none' })
     } finally {
       this._running = false
       this.setData({ loading: false })
@@ -163,6 +199,14 @@ Page({
 
   async ensureHolidays() {
     if (app.globalData.holidaysLoaded && Object.keys(app.globalData.holidayMap).length > 0) {
+      this.updateTodayMark()
+      return
+    }
+    // 语言绑定的地区不是中国大陆时，直接用本地地区官方表：不读云端公共表（那是中国口径）、
+    // 不回灌、不清理，切语言即刻生效，也不会把别的用户的节假日表写脏。
+    const region = i18n.region()
+    if (region !== 'cn') {
+      app.setHolidayMap(core.buildHolidayMap(store.mergeActiveHolidays([], region)))
       this.updateTodayMark()
       return
     }
@@ -187,6 +231,12 @@ Page({
   },
 
   async loadHolidays(silent) {
+    const region = i18n.region()
+    if (region !== 'cn') {
+      app.setHolidayMap(core.buildHolidayMap(store.mergeActiveHolidays([], region)))
+      this.updateTodayMark()
+      return
+    }
     // 自动清理已结束年份（一次启动只试一次，fire-and-forget，不阻塞首屏）
     store.pruneOldHolidays().catch(() => {})
     // App 启动不自动登录，而回灌写入要求 openid；已有身份时这里是同步返回
@@ -194,7 +244,7 @@ Page({
     const res = await store.listHolidays()
     const dbRows = store.filterActiveHolidays(res.data || [])
     if (res.error) {
-      if (!silent) wx.showToast({ title: '节假日表加载失败', icon: 'none' })
+      if (!silent) wx.showToast({ title: t('mp_hol_fail'), icon: 'none' })
       // 读库失败也用内置表兜底，保证顺延计算不因空表而失准
       if (!app.globalData.holidaysLoaded) {
         app.setHolidayMap(core.buildHolidayMap(store.mergeActiveHolidays([])))
@@ -219,17 +269,17 @@ Page({
     const today = new Date()
     const key = core.dateKey(today)
     const kind = app.globalData.holidayMap[key]
-    let mark = '工作日'
-    if (kind === 'holiday') mark = '法定节假日'
-    else if (kind === 'workday') mark = '调休补班'
-    else if (today.getDay() === 0 || today.getDay() === 6) mark = '周末'
+    let mark = t('mp_mark_workday')
+    if (kind === 'holiday') mark = t('mp_mark_holiday')
+    else if (kind === 'workday') mark = t('mp_mark_makeup')
+    else if (today.getDay() === 0 || today.getDay() === 6) mark = t('mp_mark_weekend')
     this.setData({ todayMark: mark })
   },
 
   async refreshTodos() {
     const res = await store.listTodos()
     if (res.error) {
-      wx.showToast({ title: '待办加载失败', icon: 'none' })
+      wx.showToast({ title: t('mp_idx_fail'), icon: 'none' })
       return
     }
     const todos = res.data || []
@@ -238,7 +288,7 @@ Page({
     const sync = await reminders.syncDueReminders(activeRaw, app.globalData.holidayMap)
     if (sync.error) {
       console.error('[index] 提醒同步失败：', sync.error)
-      wx.showToast({ title: '提醒同步失败，可下拉重试', icon: 'none' })
+      wx.showToast({ title: t('mp_idx_sync_fail'), icon: 'none' })
     }
 
     const fresh = (sync.fresh || []).map((row, i) => ({
@@ -246,9 +296,9 @@ Page({
       title: row.todo_title,
       atText: core.minuteKey(new Date(row.scheduled_at)),
       status: row.status,
-      reasonText: row.status === 'skipped' ? (row.remark || '节假日跳过') : (row.remark || '已到提醒时间'),
+      reasonText: row.status === 'skipped' ? (row.remark || t('mp_idx_holiday_skip')) : (row.remark || t('mp_idx_remind_due')),
     }))
-    this.setData({ freshList: fresh, freshCount: fresh.length })
+    this.setData(Object.assign({ freshList: fresh, freshCount: fresh.length }, this.langCountTexts()))
 
     // 同步写回了 last_logged_at / next_remind_at，直接合进内存，省掉一次全量拉取
     const patchMap = {}
@@ -294,11 +344,12 @@ Page({
       if (!this.data.batchMode) return item
       return Object.assign({}, item, { _checked: !!selected[String(item.id)] })
     })
-    this.setData({
+    const selectedCount = this.data.batchMode ? selectedIds(selected).length : 0
+    this.setData(Object.assign({
       activeList: list,
       pendingDoneCount: activeRaw.filter((item) => item.needDone).length,
-      selectedCount: this.data.batchMode ? selectedIds(selected).length : 0,
-    })
+      selectedCount: selectedCount,
+    }, this.langCountTexts(selectedCount)))
     this.updateFilterText(activeFiltered.length, activeRaw.length)
   },
 
@@ -401,16 +452,16 @@ Page({
   },
 
   async onLogin() {
-    this.setData({ loginText: '登录中…', loginError: '' })
+    this.setData({ loginText: t('mp_login_btn'), loginError: '' })
     const { session, error } = await store.wechatLogin()
     if (error || !session) {
       this.setData({
-        loginText: '微信一键登录',
+        loginText: t('mp_login_btn'),
         loginError: (error && error.message) || '登录失败，请重试',
       })
       return
     }
-    this.setData({ loginText: '微信一键登录', signedIn: true })
+    this.setData({ loginText: t('mp_login_btn'), signedIn: true })
     await this.ensureHolidays()
     await this.refreshTodos()
   },

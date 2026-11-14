@@ -7,7 +7,20 @@
  *    页面 onShow 里 getTabBar() 可能还没挂载好（首次进入常见），
  *    所以这里用当前路由反查 selected，不依赖页面回写。
  * 2. 不能用 selected 做「点击去重」，否则状态一旦不同步，点击就会彻底失效。
+ *
+ * 多语言：文案由 utils/i18n.js 提供，切语言后 app.refreshTabBar() 与各 tab 页
+ * onShow 都会调 applyLang()，避免 tabBar 停留在旧语言。
  */
+const i18n = require('../utils/i18n')
+
+function tabTexts() {
+  return [
+    i18n.t('mp_tab_index'),
+    i18n.t('mp_tab_history_full'),
+    i18n.t('mp_tab_mine'),
+  ]
+}
+
 Component({
   data: {
     selected: 0,
@@ -20,14 +33,23 @@ Component({
 
   lifetimes: {
     attached() {
+      this.applyLang()
       this.syncFromRoute()
     },
     ready() {
+      this.applyLang()
       this.syncFromRoute()
     },
   },
 
   methods: {
+    /** 重新取当前语言的三个标签文案 */
+    applyLang() {
+      const texts = tabTexts()
+      const list = this.data.list.map((item, i) => Object.assign({}, item, { text: texts[i] }))
+      this.setData({ list: list })
+    },
+
     /** 用当前页面路由反查选中项，避免依赖页面 onShow 的回写时机 */
     syncFromRoute() {
       const pages = typeof getCurrentPages === 'function' ? getCurrentPages() : []
@@ -57,10 +79,7 @@ Component({
         fail: (err) => {
           if (index !== prev) this.setData({ selected: prev })
           console.error('[tabbar] switchTab 失败', url, err)
-          wx.showToast({
-            title: '切换失败：' + ((err && err.errMsg) || '未知错误'),
-            icon: 'none',
-          })
+          wx.showToast({ title: '切换失败：' + ((err && err.errMsg) || '未知错误'), icon: 'none' })
         },
       })
     },

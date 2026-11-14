@@ -1,5 +1,6 @@
 const { db, cloud, callFunction } = require('./cloud')
 const { HOLIDAYS_2027 } = require('./holidays-2027')
+const { HOLIDAYS_REGION } = require('./holidays-region')
 const holidaysActive = require('./holidays-active')
 
 /** 内置节假日种子数据：新增年份在这里 concat（云端只补缺失的日期）。
@@ -81,13 +82,26 @@ function clearExcludedDays() {
   writeExcludedDays([])
 }
 
-/** 页面统一入口：内置种子兜底 + 云端覆盖 + 排除集过滤，保证有效年份完整可见 */
-function mergeActiveHolidays(dbRows) {
-  return holidaysActive.mergeWithSeed(
-    SEED_HOLIDAYS,
-    holidaysActive.filterFrom(dbRows || [], MIN_HOLIDAY_YEAR),
-    readExcludedDays()
-  )
+/**
+ * 页面统一入口：内置种子兜底 + 云端覆盖 + 排除集过滤，保证有效年份完整可见。
+ *
+ * region 由当前界面语言决定（见 utils/i18n.js 的 LANGS[].region）：
+ * - cn（默认）：完全沿用原逻辑 —— 中国大陆官方表 + 云端维护覆盖 + 用户排除集；
+ * - 其它地区：只用本地地区官方表，且**忽略云端 holidays 行**。云端那张是公共表，
+ *   存的是中国大陆口径，混进来会把中国假日显示成当地假日；同理也不回灌，
+ *   避免一个用户切语言把公共表写脏、影响所有人。
+ */
+function regionSeed(region) {
+  if (!region || region === 'cn') return SEED_HOLIDAYS
+  return HOLIDAYS_REGION[region] || SEED_HOLIDAYS
+}
+
+function mergeActiveHolidays(dbRows, region) {
+  const seed = regionSeed(region)
+  const rows = (region && region !== 'cn')
+    ? []
+    : holidaysActive.filterFrom(dbRows || [], MIN_HOLIDAY_YEAR)
+  return holidaysActive.mergeWithSeed(seed, rows, readExcludedDays())
 }
 
 /* ── 节假日本地缓存：避免每次进 App 都拉上千行 ─────────────────────────── */
@@ -632,6 +646,8 @@ module.exports = {
   pruneOldHolidays,
   filterActiveHolidays: (rows) => holidaysActive.filterFrom(rows, MIN_HOLIDAY_YEAR),
   mergeActiveHolidays,
+  regionSeed,
+  HOLIDAYS_REGION,
   readExcludedDays,
   excludeHolidayDay,
   restoreHolidayDay,

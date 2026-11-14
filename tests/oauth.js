@@ -1,8 +1,9 @@
 /**
  * 第三方账号登录全链路测试（内存 mock 云数据库 + mock 平台 HTTP 响应）
  *
- * 覆盖：五个平台凭证探测 / 授权 URL / HMAC state 防串号防过期 / X+Google PKCE /
- *       五个平台回调取唯一 subject / users+identities 账号建立与复用 /
+ * 覆盖：八个平台凭证探测 / 授权 URL / HMAC state 防串号防过期 / X+Google PKCE /
+ *       八个平台回调取唯一 subject（含 LINE/Kakao/Naver 当地社交登录）/
+ *       users+identities 账号建立与复用 /
  *       未关联小程序时 CRUD 拦截 409 NEED_LINK / 口令合并 openid /
  *       多个第三方账号收敛到同一微信 / 隐私与越权 / 老口令路径不受影响。
  * 运行：node tests/oauth.js
@@ -152,6 +153,24 @@ global.fetch = function (url, opts) {
   if (u.indexOf('api.weixin.qq.com/sns/userinfo') >= 0) {
     return jsonRes({ nickname: '微信用户' })
   }
+  if (u.indexOf('api.line.me/oauth2/v2.1/token') >= 0) {
+    return jsonRes({ access_token: 'line-token', id_token: jwt({ sub: 'line-sub-001' }) })
+  }
+  if (u.indexOf('api.line.me/oauth2/v2.1/userinfo') >= 0) {
+    return jsonRes({ userId: 'U-line-001', displayName: 'Kiwi LINE' })
+  }
+  if (u.indexOf('kauth.kakao.com/oauth/token') >= 0) {
+    return jsonRes({ access_token: 'kakao-token' })
+  }
+  if (u.indexOf('kapi.kakao.com/v2/user/me') >= 0) {
+    return jsonRes({ id: 987654321, kakao_account: { email: 'k@kakao.example', profile: { nickname: '키위' } } })
+  }
+  if (u.indexOf('nid.naver.com/oauth2.0/token') >= 0) {
+    return jsonRes({ access_token: 'naver-token' })
+  }
+  if (u.indexOf('openapi.naver.com/v1/nid/me') >= 0) {
+    return jsonRes({ resultcode: '00', message: 'success', response: { id: 'naver-id-001', nickname: 'Kiwi', email: 'n@naver.example' } })
+  }
   return jsonRes({ error: 'unknown_endpoint' }, 404)
 }
 
@@ -162,6 +181,9 @@ const ENV_KEYS = [
   'APPLE_CLIENT_ID', 'APPLE_TEAM_ID', 'APPLE_KEY_ID', 'APPLE_PRIVATE_KEY',
   'X_CLIENT_ID', 'X_CLIENT_SECRET',
   'WECHAT_WEB_APPID', 'WECHAT_WEB_SECRET',
+  'LINE_CLIENT_ID', 'LINE_CLIENT_SECRET',
+  'KAKAO_CLIENT_ID', 'KAKAO_CLIENT_SECRET',
+  'NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET',
   'OAUTH_STATE_SECRET',
 ]
 const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' })
@@ -174,6 +196,9 @@ const CREDS = {
   APPLE_PRIVATE_KEY: APPLE_PEM.replace(/\n/g, '\\n'),
   X_CLIENT_ID: 'x-id', X_CLIENT_SECRET: 'x-secret',
   WECHAT_WEB_APPID: 'wx-web-appid', WECHAT_WEB_SECRET: 'wx-web-secret',
+  LINE_CLIENT_ID: 'line-id', LINE_CLIENT_SECRET: 'line-secret',
+  KAKAO_CLIENT_ID: 'kakao-id', KAKAO_CLIENT_SECRET: 'kakao-secret',
+  NAVER_CLIENT_ID: 'naver-id', NAVER_CLIENT_SECRET: 'naver-secret',
   OAUTH_STATE_SECRET: 'test-state-secret',
 }
 function clearCreds() { for (const k of ENV_KEYS) delete process.env[k] }
@@ -234,11 +259,11 @@ async function login(provider, over) {
 async function main() {
   console.log('第三方账号登录（OAuth）全链路测试')
 
-  await test('凭证未配置时五个平台全部禁用，且列出缺失的变量名', async () => {
+  await test('凭证未配置时八个平台全部禁用，且列出缺失的变量名', async () => {
     const res = await api.main({ action: 'oauthProviders' })
     const b = bodyOf(res)
     assert.strictEqual(b.providers.length, 0)
-    assert.strictEqual(b.all.length, 5)
+    assert.strictEqual(b.all.length, 8)
     assert.ok(b.all.every((p) => !p.enabled && p.missing.length > 0))
     assert.ok(b.all.some((p) => p.id === 'apple' && p.missing.includes('APPLE_PRIVATE_KEY')))
   })
@@ -251,11 +276,18 @@ async function main() {
     assert.ok(!res.body.includes('test-state-secret'))
   })
 
-  await test('补齐凭证后五个平台全部启用', async () => {
+  await test('补齐凭证后八个平台全部启用，regions 字段就位', async () => {
     const b = bodyOf(await api.main({ action: 'oauthProviders' }))
-    assert.strictEqual(b.providers.length, 5)
+    assert.strictEqual(b.providers.length, 8)
     assert.deepStrictEqual(b.providers.map((p) => p.id).sort(),
-      ['apple', 'github', 'google', 'wechat', 'x'])
+      ['apple', 'github', 'google', 'kakao', 'line', 'naver', 'wechat', 'x'])
+    const byId = {}
+    b.providers.forEach((p) => { byId[p.id] = p })
+    assert.deepStrictEqual(byId.line.regions, ['jp'])
+    assert.deepStrictEqual(byId.kakao.regions, ['kr'])
+    assert.deepStrictEqual(byId.naver.regions, ['kr'])
+    assert.deepStrictEqual(byId.wechat.regions, ['cn'])
+    assert.deepStrictEqual(byId.github.regions, [])
   })
 
   await test('未配置的平台发起登录直接被拒绝（不留假按钮的兜底）', async () => {
@@ -364,6 +396,7 @@ async function main() {
   const expectedSubjects = {
     github: '12345', google: 'google-sub-001', apple: 'apple-sub-001',
     x: '991122', wechat: 'wx-union-001',
+    line: 'line-sub-001', kakao: '987654321', naver: 'naver-id-001',
   }
   const oauthTokens = {}
   for (const p of Object.keys(expectedSubjects)) {

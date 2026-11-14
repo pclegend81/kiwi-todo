@@ -1,57 +1,69 @@
 <view class="container" bindtap="onAnyTap">
 
   <view class="page-header">
-    <text class="page-title">我的</text>
-    <view class="page-subtitle">KIWI待办 · 云端同步</view>
+    <text class="page-title">{{T.mp_mine}}</text>
+    <view class="page-subtitle">{{T.app_name}} · {{T.mp_cloud}}</view>
   </view>
 
   <!-- 节假日维护置顶：放假 / 调休补班自行维护，改完对所有待办生效 -->
   <view class="card" bindtap="goHolidays">
     <view class="row-between">
-      <text class="title">节假日维护</text>
-      <text class="small muted">放假 / 调休补班 ›</text>
+      <text class="title">{{T.mp_holiday_card}}</text>
+      <text class="small muted">{{T.mp_holiday_sub}}</text>
     </view>
     <view class="small muted" style="margin-top:10rpx">{{holidayHint}}</view>
+    <view class="small muted" style="margin-top:6rpx">{{holidayFromText}}</view>
+  </view>
+
+  <!-- 语言：11 种苹果实时翻译语言；切换语言会同时切换当地法定节假日 -->
+  <view class="card">
+    <view class="row-between">
+      <text class="title">{{T.mp_lang_card}}</text>
+      <text class="small muted">{{regionName}}</text>
+    </view>
+    <view class="small muted" style="margin-top:10rpx">{{T.mp_lang_desc}}</view>
+    <picker mode="selector" range="{{langLabels}}" value="{{langIndex}}" bindchange="onLangChange">
+      <view class="btn btn-ghost" style="margin-top:18rpx">{{langLabels[langIndex]}} ▾</view>
+    </picker>
+    <view class="small muted" style="margin-top:10rpx">{{holidayFromText}}</view>
   </view>
 
   <!-- 微信订阅消息推送：授权入口（只保留按钮，不加状态横幅/引导文案） -->
   <view class="card">
-    <text class="title">微信订阅消息推送</text>
-    <view class="small muted" style="margin-top:10rpx">待办到点时通过微信服务通知提醒你。</view>
+    <text class="title">{{T.mp_push_card}}</text>
+    <view class="small muted" style="margin-top:10rpx">{{T.mp_push_sub}}</view>
     <view class="row auth-btns">
-      <view class="btn btn-ghost auth-btn" bindtap="onAuthTap">开启推送服务</view>
-      <view class="btn btn-ghost auth-btn" bindtap="onRenewTap">补充提醒次数</view>
-      <view class="btn btn-ghost auth-btn" bindtap="onTestTap">发送测试提醒</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onAuthTap">{{T.mp_push_on}}</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onRenewTap">{{T.mp_push_renew}}</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onTestTap">{{T.mp_push_test}}</view>
     </view>
   </view>
 
   <!-- 网页/电脑端同步：口令绑定到本账号，电脑浏览器、安卓/iOS 浏览器与小程序互相同步 -->
   <view class="card">
     <view class="row-between">
-      <text class="title">网页 / 电脑端同步</text>
-      <text wx:if="{{syncCode}}" class="link" bindtap="onSyncRevoke">作废口令</text>
+      <text class="title">{{T.mp_sync_card}}</text>
+      <text wx:if="{{syncCode}}" class="link" bindtap="onSyncRevoke">{{T.mp_sync_revoke}}</text>
     </view>
-    <view class="small muted" style="margin-top:10rpx">
-      在电脑浏览器、手机浏览器打开 KIWI待办网页版，输入这个口令即可和这里互相同步待办。
-    </view>
+    <view class="small muted" style="margin-top:10rpx">{{T.mp_sync_desc}}</view>
     <view wx:if="{{syncCode}}" class="sync-code-box" bindtap="onSyncGenerate">
       <text class="sync-code">{{syncCode}}</text>
-      <text class="small muted">{{syncExpireText || '点击复制'}}</text>
+      <text class="small muted">{{syncExpireText || T.mp_sync_copy}}</text>
     </view>
     <view class="btn" style="margin-top:20rpx" bindtap="onSyncGenerate">
-      {{syncCode ? '复制口令' : '生成同步口令'}}
+      {{syncCode ? T.mp_sync_btn_copy : T.mp_sync_btn_gen}}
     </view>
   </view>
 
   <view class="card">
     <view class="row-between">
-      <text class="title">{{signedIn ? '已登录' : '未登录'}}</text>
-      <text wx:if="{{signedIn}}" class="link" bindtap="onSignOut">退出登录</text>
+      <text class="title">{{signedIn ? T.mp_login_on : T.mp_login_off}}</text>
+      <text wx:if="{{signedIn}}" class="link" bindtap="onSignOut">{{T.mp_logout}}</text>
     </view>
     <view class="small muted" style="margin-top:10rpx">
-      {{signedIn ? '待办与提醒记录已保存在云端，换设备自动同步。' : '登录后才能保存待办和提醒记录。'}}
+      {{signedIn ? T.mp_login_desc_on : T.mp_login_desc_off}}
     </view>
-    <view wx:if="{{!signedIn}}" class="btn" style="margin-top:24rpx" bindtap="onLogin">微信一键登录</view>
+    <view wx:if="{{!signedIn}}" class="btn" style="margin-top:24rpx" bindtap="onLogin">{{T.mp_login_btn}}</view>
   </view>
 
 </view>

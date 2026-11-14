@@ -2,7 +2,7 @@
  * KIWI待办 · 第三方账号登录适配器（webapi 云函数侧）
  *
  * 设计要点：
- *  1. 五个平台（GitHub / Google / Apple / X / 微信开放平台网页应用）各自只暴露
+ *  1. 八个平台（GitHub / Google / Apple / X / 微信 / LINE / Kakao / Naver）各自只暴露
  *     「拼授权 URL」「换 token」「取平台唯一用户 ID」三件事，彼此互不影响；
  *  2. **凭证全部来自云函数环境变量**，一个都没配的平台自动 disabled，
  *     网页端拿到的 providers 列表里就不会出现它 —— 不留点了没反应的假按钮；
@@ -14,11 +14,15 @@
  * 注意：这里的「微信」指微信开放平台「网站应用」网页扫码登录，拿的是开放平台
  * openid / unionid；与小程序 wx.login 的 openid 不是同一个值，所以仍需通过
  * 「同步口令」把网页身份与小程序数据合并（见 index.js 的 linkWechat）。
+ * LINE / Kakao / Naver 分别对应日本、韩国的当地主流社交登录，带 regions 字段，
+ * 网页端按用户所选语言/地区过滤显示（空 regions = 全球通用，任何地区都显示）。
  */
 const crypto = require('crypto')
 
 /** 各平台的端点与所需环境变量。env 里的名字只用于展示「还缺什么」，不含任何值 */
 const PROVIDERS = [
+  // regions：该平台主要流行的地区（对应 webapp/i18n.js 的 LANGS[].region）。
+  // 空数组 = 全球通用平台，任何语言/地区下都显示。
   {
     id: 'github', name: 'GitHub',
     env: ['GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET'],
@@ -27,6 +31,7 @@ const PROVIDERS = [
     profileUrl: 'https://api.github.com/user',
     scope: 'read:user user:email',
     pkce: false,
+    regions: [],
   },
   {
     id: 'google', name: 'Google',
@@ -36,6 +41,7 @@ const PROVIDERS = [
     profileUrl: 'https://openidconnect.googleapis.com/v1/userinfo',
     scope: 'openid email profile',
     pkce: true,
+    regions: [],
   },
   {
     id: 'apple', name: 'Apple',
@@ -45,6 +51,7 @@ const PROVIDERS = [
     profileUrl: '', // Apple 的用户标识直接在 id_token 里，无需额外请求
     scope: '',      // 不带 scope 才能用 response_mode=query 回落到静态回调页
     pkce: false,
+    regions: [],
   },
   {
     id: 'x', name: 'X',
@@ -54,6 +61,7 @@ const PROVIDERS = [
     profileUrl: 'https://api.x.com/2/users/me',
     scope: 'tweet.read users.read offline.access',
     pkce: true,     // X 强制 PKCE（S256），不接受 plain
+    regions: [],
   },
   {
     id: 'wechat', name: '微信',
@@ -63,6 +71,40 @@ const PROVIDERS = [
     profileUrl: 'https://api.weixin.qq.com/sns/userinfo',
     scope: 'snsapi_login',
     pkce: false,
+    regions: ['cn'],
+  },
+  {
+    // LINE Login v2.1：日本国民级社交应用，标准 OAuth2 + 可选 PKCE
+    id: 'line', name: 'LINE',
+    env: ['LINE_CLIENT_ID', 'LINE_CLIENT_SECRET'],
+    authorize: 'https://access.line.me/oauth2/v2.1/authorize',
+    tokenUrl: 'https://api.line.me/oauth2/v2.1/token',
+    profileUrl: 'https://api.line.me/oauth2/v2.1/userinfo',
+    scope: 'profile openid',
+    pkce: false,
+    regions: ['jp'],
+  },
+  {
+    // Kakao Talk：韩国国民级社交应用，OAuth2，用户标识取 id 属性
+    id: 'kakao', name: 'Kakao',
+    env: ['KAKAO_CLIENT_ID', 'KAKAO_CLIENT_SECRET'],
+    authorize: 'https://kauth.kakao.com/oauth/authorize',
+    tokenUrl: 'https://kauth.kakao.com/oauth/token',
+    profileUrl: 'https://kapi.kakao.com/v1/user/access_token_info', // 见 fetchIdentity：实际用 /v2/user/me
+    scope: '',
+    pkce: false,
+    regions: ['kr'],
+  },
+  {
+    // Naver：韩国门户 Naver 的 OAuth2 登录，响应包一层 response
+    id: 'naver', name: 'Naver',
+    env: ['NAVER_CLIENT_ID', 'NAVER_CLIENT_SECRET'],
+    authorize: 'https://nid.naver.com/oauth2.0/authorize',
+    tokenUrl: 'https://nid.naver.com/oauth2.0/token',
+    profileUrl: 'https://openapi.naver.com/v1/nid/me',
+    scope: '',
+    pkce: false,
+    regions: ['kr'],
   },
 ]
 
@@ -106,6 +148,7 @@ function listProviders() {
       name: p.name,
       enabled: !!r.cfg,
       pkce: p.pkce,
+      regions: p.regions || [],
       missing: r.missing,
     }
   })
@@ -275,8 +318,8 @@ function decodeJwtPayload(token) {
   return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
 }
 
-/** 换 token，返回 { accessToken, idToken, raw } */
-async function exchange(p, cfg, code, verifier, redirect) {
+/** 换 token，返回 { accessToken, idToken, raw }。rawState：Naver 要求原样回传授权时的 state */
+async function exchange(p, cfg, code, verifier, redirect, rawState) {
   const common = {
     grant_type: 'authorization_code',
     code: code,
@@ -310,6 +353,29 @@ async function exchange(p, cfg, code, verifier, redirect) {
       code_verifier: verifier,
       client_id: cfg.clientId,
     }), { 'Authorization': 'Basic ' + basic })
+    return { accessToken: data.access_token || '', idToken: '', raw: data }
+  }
+  if (p.id === 'line') {
+    const data = await postForm(p.tokenUrl, Object.assign({}, common, {
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+    }))
+    return { accessToken: data.access_token || '', idToken: data.id_token || '', raw: data }
+  }
+  if (p.id === 'kakao') {
+    const data = await postForm(p.tokenUrl, Object.assign({}, common, {
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+    }))
+    return { accessToken: data.access_token || '', idToken: data.id_token || '', raw: data }
+  }
+  if (p.id === 'naver') {
+    const data = await postForm(p.tokenUrl, Object.assign({}, common, {
+      client_id: cfg.clientId,
+      client_secret: cfg.clientSecret,
+      // Naver 要求把授权时的 state 原样回传，否则报 invalid_request
+      state: String(rawState || ''),
+    }))
     return { accessToken: data.access_token || '', idToken: '', raw: data }
   }
   // 微信开放平台：token 接口是 GET，参数走 query
@@ -350,6 +416,34 @@ async function fetchIdentity(p, cfg, tokens) {
     if (!d.data || !d.data.id) throw new Error('X 未返回用户 ID')
     return { subject: String(d.data.id), name: (d.data.username || ''), email: '' }
   }
+  if (p.id === 'line') {
+    // LINE：优先 id_token 里的 sub（OpenID Connect），退回 /v2.1/userinfo 的 userId
+    let d = null
+    if (tokens.idToken) {
+      try {
+        const payload = decodeJwtPayload(tokens.idToken)
+        if (payload.sub) return { subject: String(payload.sub), name: payload.name || '', email: payload.email || '' }
+      } catch (e) { /* 解析失败走 userinfo */ }
+    }
+    d = await getJson(p.profileUrl, { 'Authorization': 'Bearer ' + tokens.accessToken })
+    if (!d.userId) throw new Error('LINE 未返回用户标识')
+    return { subject: String(d.userId), name: d.displayName || '', email: '' }
+  }
+  if (p.id === 'kakao') {
+    // Kakao /v2/user/me：带 Bearer 即可；id 是平台唯一数字标识
+    const d = await getJson('https://kapi.kakao.com/v2/user/me', { 'Authorization': 'Bearer ' + tokens.accessToken })
+    if (!d.id) throw new Error('Kakao 未返回用户标识')
+    const acc = d.kakao_account || {}
+    const profile = acc.profile || {}
+    return { subject: String(d.id), name: profile.nickname || '', email: acc.email || '' }
+  }
+  if (p.id === 'naver') {
+    // Naver /v1/nid/me：响应包一层 resultcode/message/response
+    const d = await getJson(p.profileUrl, { 'Authorization': 'Bearer ' + tokens.accessToken })
+    const u = d.response || {}
+    if (!u.id) throw new Error('Naver 未返回用户标识')
+    return { subject: String(u.id), name: u.nickname || u.name || '', email: u.email || '' }
+  }
   // 微信：unionid 优先（同一开放平台账号下跨应用稳定），否则退回 openid
   const subject = String(tokens.raw.unionid || tokens.raw.openid || '')
   if (!subject) throw new Error('微信未返回用户标识')
@@ -388,7 +482,7 @@ async function callback(input) {
       throw new Error('PKCE 校验失败，请重新发起登录')
     }
   }
-  const tokens = await exchange(p, r.cfg, code, String(src.verifier || ''), redirect)
+  const tokens = await exchange(p, r.cfg, code, String(src.verifier || ''), redirect, src.state)
   if (!tokens.accessToken && !tokens.idToken) throw new Error('平台未返回访问令牌')
   const who = await fetchIdentity(p, r.cfg, tokens)
   return {

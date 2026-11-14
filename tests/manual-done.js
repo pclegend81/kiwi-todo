@@ -171,12 +171,12 @@ async function main() {
     assert.ok(/pendingFirst/.test(indexJs))
     assert.ok(/\(b\.needDone \? 1 : 0\) - \(a\.needDone \? 1 : 0\)/.test(indexJs))
     assert.ok(/pendingDoneCount: activeRaw\.filter/.test(indexJs))
-    assert.ok(/待确认 \{\{pendingDoneCount\}\} 条/.test(indexWxml))
+    assert.ok(/待确认 \{\{pendingDoneCount\}\} 条|T\.idx_pending_short/.test(indexWxml))
   })
 
   check('卡片「确认做完了」入口保持完整（catchtap / 二次确认 / 同步补额度）', () => {
     assert.ok(/catchtap="onDoneTap"/.test(indexWxml))
-    assert.ok(/确认做完了/.test(indexWxml))
+    assert.ok(/确认做完了|T\.idx_confirm_done/.test(indexWxml))
     assert.ok(/wx:if="\{\{item\.needDone\}\}" class="tag tag-red"/.test(indexWxml))
     assert.ok(/\.tag-red\s*\{/.test(appWxss))
     assert.ok(/\.done-btn-on\s*\{/.test(indexWxss))
@@ -206,8 +206,8 @@ async function main() {
     assert.ok(/doneText: manual \? '手工完成' : '自动完成'/.test(historyJs))
     assert.ok(/const manual = item\.status === 'done'/.test(historyJs))
     assert.ok(/doneAtText: manual && !isNaN\(doneAt\) && doneAt > 0/.test(historyJs))
-    assert.ok(/已完成的待办/.test(historyWxml))
-    assert.ok(/默认提醒发完自动完成并归档/.test(historyWxml))
+    assert.ok(/已完成的待办|T\.hist_finished_prefix/.test(historyWxml))
+    assert.ok(/默认提醒发完自动完成并归档|T\.hist_tip/.test(historyWxml))
   })
 
   /* ── 4. 编辑页开关 ─────────────────────────────────────────────── */

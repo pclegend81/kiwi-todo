@@ -11,21 +11,85 @@
   'use strict'
 
   var core = window.KiwiCore
-  var HOLIDAYS = window.KIWI_HOLIDAYS || []
+  var HOLIDAYS = window.KIWI_HOLIDAYS || []          // 中国大陆 2027（默认，保持原样）
   var Vue = window.Vue
+  var LANGS = window.KIWI_LANGS || []
+  var LOCALES = window.KIWI_LOCALES || {}
+  var I18N_BASE = window.KIWI_I18N || {}
+  var EXTRA = window.KIWI_I18N_EXTRA || {}
+  var REGION_HOLIDAYS = window.KIWI_REGION_HOLIDAYS || {}
 
   var LS_TOKEN = 'kiwi_web_token'
   var LS_API = 'kiwi_web_api'
+  var LS_LANG = 'kiwi_web_lang'
   var POLL_MS = 20000 // 20 秒轮询，保证小程序端改动能较快反映到网页端
 
-  // 内置节假日表（与小程序 pusher 同一份数据，云端表覆盖由 webapi 负责）
-  var holidayMap = {}
-  for (var i = 0; i < HOLIDAYS.length; i++) {
-    var row = HOLIDAYS[i]
-    holidayMap[row.day] = row.kind === 'workday' ? 'workday' : 'holiday'
+  // 合并「基础字典 + 补充字典」；缺词回退 zh-CN，再回退 key 本身，新增 key 不会白屏
+  var I18N = {}
+  for (var li = 0; li < LANGS.length; li++) {
+    var code = LANGS[li].code
+    var dict = Object.assign({}, I18N_BASE[code] || {})
+    Object.keys(EXTRA).forEach(function (k) {
+      dict[k] = (EXTRA[k] && EXTRA[k][code]) || (EXTRA[k] && EXTRA[k]['zh-CN']) || k
+    })
+    I18N[code] = dict
+  }
+
+  function validLang(c) {
+    for (var i = 0; i < LANGS.length; i++) if (LANGS[i].code === c) return true
+    return false
+  }
+
+  /** 首次访问按浏览器语言猜一个，猜不中回落简体中文 */
+  function initialLang() {
+    var saved = lsGet(LS_LANG)
+    if (validLang(saved)) return saved
+    var nav = String((navigator.language || navigator.userLanguage || '')).toLowerCase()
+    var map = {
+      'zh-tw': 'zh-TW', 'zh-hk': 'zh-TW', 'zh-mo': 'zh-TW', 'zh-cn': 'zh-CN',
+      'en-gb': 'en-GB', 'en-us': 'en-US', 'en-au': 'en-GB', 'ja': 'ja', 'ja-jp': 'ja',
+      'ko': 'ko', 'ko-kr': 'ko', 'de': 'de', 'fr': 'fr', 'es': 'es',
+      'it': 'it', 'pt-br': 'pt-BR', 'pt': 'pt-BR',
+    }
+    if (map[nav]) return map[nav]
+    var head = nav.slice(0, 2)
+    if (map[head]) return map[head]
+    return 'zh-CN'
+  }
+
+  /** 语言 -> 地区（cn/us/gb/jp/kr/de/fr/es/it/br），地区决定用哪份节假日表 */
+  function regionOf(c) {
+    for (var i = 0; i < LANGS.length; i++) if (LANGS[i].code === c) return LANGS[i].region
+    return 'cn'
+  }
+
+  function translate(c, key, vars) {
+    var d = I18N[c] || I18N['zh-CN'] || {}
+    var s = d[key]
+    if (s === undefined) s = (I18N['zh-CN'] || {})[key]
+    if (s === undefined) s = key
+    s = String(s)
+    var v = vars || {}
+    return s.replace(/\{(\w+)\}/g, function (m, k) {
+      return v[k] === undefined ? m : String(v[k])
+    })
+  }
+
+  /**
+   * 节假日表按当前语言的地区重建：切换语言 = 切换当地法定节假日。
+   * 中国大陆地区沿用原 HOLIDAYS_2027（含调休补班 workday），其它地区用地区表。
+   */
+  function buildHolidayMap(region) {
+    var rows = REGION_HOLIDAYS[region] || HOLIDAYS
+    var map = {}
+    for (var i = 0; i < rows.length; i++) {
+      map[rows[i].day] = rows[i].kind === 'workday' ? 'workday' : 'holiday'
+    }
+    return map
   }
 
   var notified = Object.create(null) // 本次会话已弹过通知的 at，避免重复
+  var currentLang = initialLang()   // 模块级镜像：非组件代码（callApi / 回调页）也要取词
 
   function lsGet(k) { try { return localStorage.getItem(k) || '' } catch (e) { return '' } }
   function lsSet(k, v) { try { localStorage.setItem(k, v) } catch (e) { /* 隐私模式忽略 */ } }
@@ -33,7 +97,7 @@
 
   /** 调 webapi。兼容 HTTP 访问服务的「集成响应」与「普通响应」两种返回包装 */
   function callApi(url, action, payload) {
-    if (!url) return Promise.reject(new Error('请先填写接口地址'))
+    if (!url) return Promise.reject(new Error(translate(currentLang, 't_no_api')))
     var body = Object.assign({ action: action }, payload || {})
     return fetch(url, {
       method: 'POST',
@@ -44,7 +108,7 @@
         var status = res.status
         var data
         try { data = JSON.parse(text) } catch (e) {
-          throw new Error('接口返回异常（HTTP ' + status + '）：' + text.slice(0, 120))
+          throw new Error(translate(currentLang, 't_api_bad', { n: status }) + '：' + text.slice(0, 120))
         }
         // 未开启集成响应时，整个 {statusCode, headers, body} 会被当 JSON 返回；
         // 此时 HTTP 层恒为 200，需要把内层 statusCode 取出来，401/409 才判得准。
@@ -56,7 +120,7 @@
           try { data = JSON.parse(data) } catch (e) {}
         }
         if (!data || !data.ok) {
-          var msg = (data && data.message) || ('请求失败（HTTP ' + status + '）')
+          var msg = (data && data.message) || translate(currentLang, 't_req_fail', { n: status })
           var err = new Error(msg)
           err.status = status
           err.code = (data && data.code) || ''
@@ -101,6 +165,10 @@
       return {
         bound: !!lsGet(LS_TOKEN),
         token: lsGet(LS_TOKEN),
+        // 当前界面语言；切换它会同时按语言绑定的地区重建 holidayMap
+        lang: currentLang,
+        holidayMap: buildHolidayMap(regionOf(currentLang)),
+        showLangMenu: false,
         codeInput: '',
         apiUrl: lsGet(LS_API),
         showApi: false,
@@ -123,6 +191,18 @@
     },
 
     computed: {
+      /** 语言绑定的地区：决定用哪份当地法定节假日表、以及显示哪些当地社交登录 */
+      region: function () { return regionOf(this.lang) },
+      regionName: function () { return translate(this.lang, 'region_name') },
+      langList: function () { return LANGS },
+      /** 登录按钮：全球通用平台（regions 为空）始终显示，当地平台只在对应地区显示 */
+      visibleProviders: function () {
+        var rg = this.region
+        return (this.providers || []).filter(function (p) {
+          var rs = p.regions || []
+          return !rs.length || rs.indexOf(rg) >= 0
+        })
+      },
       /** OAuth 回调页与 index.html 同目录，拼成绝对地址给云函数签进 state */
       oauthRedirect: function () {
         try { return new URL('oauth-callback.html', window.location.href).href } catch (e) { return '' }
@@ -153,11 +233,11 @@
         for (var i = 0; i < list.length; i++) {
           if (list[i].status !== 'active') continue
           try {
-            var n = core.nextOccurrence(list[i], Date.now(), holidayMap)
+            var n = core.nextOccurrence(list[i], Date.now(), this.holidayMap)
             if (n && (!best || n.at < best.at)) best = n
           } catch (e) { /* 单条规则异常不影响其它待办 */ }
         }
-        return best ? best.atText : '暂无待提醒'
+        return best ? best.atText : translate(this.lang, 't_none_upcoming')
       },
       hasInterval: function () {
         return ['daily', 'weekly', 'monthly', 'yearly', 'hourly', 'minutely']
@@ -165,10 +245,10 @@
       },
       unitText: function () {
         var u = {
-          daily: '天', weekly: '周', monthly: '个月', yearly: '年',
-          hourly: '小时', minutely: '分钟',
+          daily: 'unit_day', weekly: 'unit_week', monthly: 'unit_month', yearly: 'unit_year',
+          hourly: 'unit_hour', minutely: 'unit_minute',
         }
-        return u[this.form.repeat_type] || ''
+        return u[this.form.repeat_type] ? translate(this.lang, u[this.form.repeat_type]) : ''
       },
     },
 
@@ -179,6 +259,8 @@
 
     mounted: function () {
       var self = this
+      document.documentElement.lang = this.lang
+      document.title = translate(this.lang, 'app_name') + ' · ' + translate(this.lang, 'page_sub')
       if (this.bound) {
         this.loadAccount().then(function () { return self.refresh(true) })
       } else {
@@ -207,6 +289,26 @@
     },
 
     methods: {
+      /** 取词模板：t(key, {n:5}) 会替换 {n} 占位符 */
+      t: function (key, vars) { return translate(this.lang, key, vars) },
+
+      /**
+       * 切换语言：① 存本地 ② 按语言绑定的地区重建 holidayMap（节假日立即跟着变）
+       * ③ 刷新「下一次提醒」等依赖 holidayMap 的展示 ④ 更新标题与提示。
+       */
+      setLang: function (c) {
+        if (!validLang(c)) return
+        currentLang = c
+        lsSet(LS_LANG, c)
+        this.lang = c
+        this.holidayMap = buildHolidayMap(regionOf(c))
+        this.showLangMenu = false
+        document.title = translate(c, 'app_name') + ' · ' + translate(c, 'page_sub')
+        this.showToast(translate(c, 'mp_region_toast', { name: translate(c, 'region_name') }))
+      },
+
+      locale: function () { return LOCALES[this.lang] || 'zh-CN' },
+
       setFilter: function (f) {
         this.filter = f
       },
@@ -270,7 +372,7 @@
         if (!code) return
         if (!this.apiUrl) {
           this.showApi = true
-          this.showToast('请先填写接口地址')
+          this.showToast(this.t('t_no_api'))
           return
         }
         this.busy = true
@@ -281,10 +383,10 @@
             self.token = res.token
             self.bound = true
             self.codeInput = ''
-            self.showToast('绑定成功，正在同步…')
+            self.showToast(self.t('t_bound'))
             return self.loadAccount().then(function () { return self.refresh() })
           })
-          .catch(function (e) { self.showToast(e.message || '绑定失败') })
+          .catch(function (e) { self.showToast(e.message || self.t('t_bind_fail')) })
           .then(function () { self.busy = false })
       },
 
@@ -313,12 +415,12 @@
         var self = this
         if (!this.apiUrl) {
           this.showApi = true
-          this.showToast('请先填写接口地址')
+          this.showToast(this.t('t_no_api'))
           return
         }
         var redirect = this.oauthRedirect
         if (!/^https?:/.test(redirect) || redirect.indexOf('https://') !== 0) {
-          this.showToast('第三方登录需部署到 HTTPS 静态托管后使用')
+          this.showToast(this.t('t_https'))
           return
         }
         lsSet(LS_API, this.apiUrl)
@@ -337,7 +439,7 @@
             window.location.href = res.url
           })
           .catch(function (e) {
-            self.showToast(e.message || '发起登录失败')
+            self.showToast(e.message || self.t('t_start_fail'))
             self.busy = false
           })
       },
@@ -351,24 +453,24 @@
         this.api('linkWechat', { token: this.token, code: code })
           .then(function () {
             self.linkCode = ''
-            self.showToast('已关联，正在同步…')
+            self.showToast(self.t('t_linked'))
             return self.loadAccount().then(function () { return self.refresh(true) })
           })
-          .catch(function (e) { self.showToast(e.message || '关联失败') })
+          .catch(function (e) { self.showToast(e.message || self.t('t_link_fail')) })
           .then(function () { self.busy = false })
       },
 
       providerMark: function (id) {
-        return { github: 'GH', google: 'G', apple: 'A', x: 'X', wechat: '微' }[id] || '?'
+        return { github: 'GH', google: 'G', apple: 'A', x: 'X', wechat: 'W', line: 'L', kakao: 'K', naver: 'N' }[id] || '?'
       },
 
       providerName: function (id) {
-        return { github: 'GitHub', google: 'Google', apple: 'Apple', x: 'X', wechat: '微信', code: '同步口令' }[id] || id
+        return { github: 'GitHub', google: 'Google', apple: 'Apple', x: 'X', wechat: 'WeChat', line: 'LINE', kakao: 'Kakao', naver: 'Naver', code: translate(this.lang, 'provider_code') }[id] || id
       },
 
       unbind: function () {
         this.doUnbindLocal()
-        this.showToast('已退出本设备，云端数据不受影响')
+        this.showToast(this.t('t_exit'))
       },
 
       refresh: function (silent) {
@@ -378,8 +480,8 @@
         return this.api('listTodos', { token: this.token })
           .then(function (res) {
             self.todos = res.todos || []
-            self.lastSyncText = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-            if (!silent) self.showToast('已同步 ' + self.todos.length + ' 条')
+            self.lastSyncText = new Date().toLocaleTimeString(self.locale(), { hour12: false })
+            if (!silent) self.showToast(self.t('t_synced', { n: self.todos.length }))
           })
           .catch(function (e) {
             if (e.code === 'NEED_LINK') {
@@ -387,10 +489,10 @@
                 linked: false, needsLink: true,
                 provider: (self.account && self.account.provider) || 'oauth',
               }
-              if (!silent) self.showToast('请先关联微信小程序')
+              if (!silent) self.showToast(self.t('t_need_link'))
               return
             }
-            if (!silent) self.showToast(e.message || '同步失败')
+            if (!silent) self.showToast(e.message || self.t('t_sync_fail'))
           })
           .then(function () { self.refreshing = false })
       },
@@ -419,7 +521,7 @@
         var self = this
         if (!this.form.title || !this.form.remindLocal) return
         var iso = localToIso(this.form.remindLocal)
-        if (!iso) { this.showToast('提醒时间不合法'); return }
+        if (!iso) { this.showToast(this.t('t_bad_time')); return }
         var todo = {
           title: this.form.title,
           note: this.form.note,
@@ -439,10 +541,10 @@
           : this.api('updateTodo', { token: this.token, id: this.editing.id, patch: todo })
         p.then(function () {
           self.editing = null
-          self.showToast(isNew ? '已创建，小程序里也能看到' : '已保存并同步')
+          self.showToast(isNew ? self.t('t_created') : self.t('t_saved'))
           return self.refresh(true)
         })
-          .catch(function (e) { self.showToast(e.message || '保存失败') })
+          .catch(function (e) { self.showToast(e.message || self.t('t_save_fail')) })
           .then(function () { self.busy = false })
       },
 
@@ -452,36 +554,49 @@
           token: this.token, id: t.id,
           patch: { status: 'done', done_at: new Date().toISOString() },
         })
-          .then(function () { self.showToast('已完成'); return self.refresh(true) })
-          .catch(function (e) { self.showToast(e.message || '操作失败') })
+          .then(function () { self.showToast(self.t('t_done')); return self.refresh(true) })
+          .catch(function (e) { self.showToast(e.message || self.t('t_op_fail')) })
       },
 
       remove: function (t) {
         var self = this
-        if (!window.confirm('确定删除「' + (t.title || '无标题') + '」？三端都会同步删除。')) return
+        if (!window.confirm(this.t('t_confirm', { title: t.title || this.t('t_no_title_val') }))) return
         this.api('removeTodo', { token: this.token, id: t.id })
-          .then(function () { self.showToast('已删除'); return self.refresh(true) })
-          .catch(function (e) { self.showToast(e.message || '删除失败') })
+          .then(function () { self.showToast(self.t('t_deleted')); return self.refresh(true) })
+          .catch(function (e) { self.showToast(e.message || self.t('t_del_fail')) })
       },
 
       nextText: function (t) {
         try {
-          var n = core.nextOccurrence(t, Date.now(), holidayMap)
-          return n ? n.atText : '（当前规则下没有后续提醒）'
+          var n = core.nextOccurrence(t, Date.now(), this.holidayMap)
+          return n ? n.atText : this.t('t_no_next')
         } catch (e) { return '' }
       },
 
       repeatText: function (t) {
-        try { return core.describeRepeat(t) } catch (e) { return '仅一次' }
+        var ty = t.repeat_type || 'none'
+        var keys = {
+          none: 'rep_none', daily: 'rep_daily', weekly: 'rep_weekly', monthly: 'rep_monthly',
+          yearly: 'rep_yearly', workday: 'rep_workday', restday: 'rep_restday',
+          hourly: 'rep_hourly', minutely: 'rep_minutely', dates: 'rep_dates',
+        }
+        if (!keys[ty]) return this.t('rep_none')
+        var n = Math.max(1, Number(t.repeat_interval) || 1)
+        var units = {
+          daily: 'unit_day', weekly: 'unit_week', monthly: 'unit_month',
+          yearly: 'unit_year', hourly: 'unit_hour', minutely: 'unit_minute',
+        }
+        if (n > 1 && units[ty]) return this.t('rep_every', { n: n, unit: this.t(units[ty]) })
+        return this.t(keys[ty])
       },
 
       priorityText: function (p) {
-        return { high: '高', medium: '中', low: '低' }[p] || '中'
+        return { high: this.t('prio_high'), medium: this.t('prio_medium'), low: this.t('prio_low') }[p] || this.t('prio_medium')
       },
 
       fmtTime: function (v) {
         var d = new Date(v)
-        return isNaN(d.getTime()) ? '' : d.toLocaleString('zh-CN', { hour12: false })
+        return isNaN(d.getTime()) ? '' : d.toLocaleString(this.locale(), { hour12: false })
       },
 
       /** 页面打开期间的本地通知：只提示，不改数据；真正的微信提醒仍由 pusher 下发 */
@@ -498,12 +613,17 @@
           var key = t.id + ':' + base
           if (base <= now && now - base < 60000 && !notified[key]) {
             notified[key] = true
-            try { new Notification('KIWI待办 · ' + (t.title || '提醒'), { body: t.note || '有一条待办到点了' }) } catch (e) {}
+            try { new Notification(this.t('app_name') + ' · ' + (t.title || this.t('notify_remind')), { body: t.note || this.t('t_notif_body') }) } catch (e) {}
           }
         }
       },
     },
   })
+
+  // 模板里的 $t(key, vars)：this 是组件代理，能读到响应式的 lang，切语言自动重渲染
+  app.config.globalProperties.$t = function (key, vars) {
+    return translate(this.lang || currentLang, key, vars)
+  }
 
   app.mount('#app')
 

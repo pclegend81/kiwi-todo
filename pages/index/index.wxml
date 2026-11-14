@@ -1,8 +1,8 @@
 <view class="container {{batchMode ? 'container-batch' : ''}}" bindtap="onAnyTap">
 
   <view wx:if="{{!signedIn}}" class="card">
-    <view class="title">登录后使用 KIWI待办</view>
-    <view class="small muted" style="margin-top:12rpx">数据保存在云端，换设备也能看到；提醒记录会完整留存。</view>
+    <view class="title">{{T.idx_login_title}}</view>
+    <view class="small muted" style="margin-top:12rpx">{{T.idx_login_desc}}</view>
     <view class="btn" style="margin-top:28rpx" bindtap="onLogin">{{loginText}}</view>
     <view wx:if="{{loginError}}" class="small" style="margin-top:16rpx;color:#d70015;font-weight:600">{{loginError}}</view>
   </view>
@@ -11,42 +11,42 @@
 
     <view class="page-header">
       <view class="row-between">
-        <text class="page-title">待办</text>
+        <text class="page-title">{{T.idx_title}}</text>
         <view class="row">
-          <text wx:if="{{!batchMode}}" class="chip" bindtap="openBatch">批量管理</text>
-          <text class="chip" bindtap="goNew">+ 新建</text>
+          <text wx:if="{{!batchMode}}" class="chip" bindtap="openBatch">{{T.idx_batch_manage}}</text>
+          <text class="chip" bindtap="goNew">{{T.idx_new}}</text>
         </view>
       </view>
-      <view class="page-subtitle">进行中 {{activeList.length}} 条<block wx:if="{{pendingDoneCount > 0}}"> · 待确认 {{pendingDoneCount}} 条</block> · 今日 {{todayMark}}</view>
+      <view class="page-subtitle">{{T.f_active}} {{activeList.length}}<block wx:if="{{pendingDoneCount > 0}}"> · {{T.idx_pending_short}} {{pendingDoneCount}}</block> · {{T.idx_today}} {{todayMark}}</view>
     </view>
 
     <!-- 批量模式：进入时默认全选，可一次确认完成或删除 -->
     <view wx:if="{{batchMode}}" class="card batch-panel">
       <view class="row-between">
-        <text class="title">批量管理</text>
-        <text class="small link" bindtap="closeBatch">退出</text>
+        <text class="title">{{T.idx_batch_manage}}</text>
+        <text class="small link" bindtap="closeBatch">{{T.idx_exit}}</text>
       </view>
-      <view class="small muted" style="margin-top:8rpx">默认已全选当前列表；点卡片可取消勾选。可一次「确认完成」或「删除」，删除不可恢复，先把不想动的取消掉。其中「待确认完成」的已排在最前。</view>
+      <view class="small muted" style="margin-top:8rpx">{{T.idx_batch_desc}}</view>
       <view class="row" style="margin-top:16rpx">
         <view class="seg">
-          <text class="seg-item" data-mode="all" bindtap="onBatchSelect">全选</text>
-          <text class="seg-item" data-mode="pending" bindtap="onBatchSelect">仅待确认</text>
-          <text class="seg-item" data-mode="none" bindtap="onBatchSelect">清空</text>
+          <text class="seg-item" data-mode="all" bindtap="onBatchSelect">{{T.idx_all}}</text>
+          <text class="seg-item" data-mode="pending" bindtap="onBatchSelect">{{T.idx_only_pending}}</text>
+          <text class="seg-item" data-mode="none" bindtap="onBatchSelect">{{T.idx_clear}}</text>
         </view>
       </view>
     </view>
 
     <view wx:if="{{freshCount > 0}}" class="card banner-card">
       <view class="row-between">
-        <text class="title">最近 {{freshCount}} 条提醒已到期</text>
-        <text class="small muted" bindtap="dismissBanner">知道了</text>
+        <text class="title">{{freshTitleText}}</text>
+        <text class="small muted" bindtap="dismissBanner">{{T.idx_got_it}}</text>
       </view>
       <view class="divider"></view>
-      <view class="small muted" style="margin-bottom:12rpx">最近 2 小时内补记的记录；点任意一条可顺手补 1 次微信提醒次数。</view>
+      <view class="small muted" style="margin-bottom:12rpx">{{T.idx_fresh_desc}}</view>
       <view wx:for="{{freshList}}" wx:key="key" class="fresh-item" bindtap="onFreshItem">
         <view class="row-between">
           <text class="fresh-title">{{item.title}}</text>
-          <view class="tag {{item.status === 'skipped' ? 'tag-orange' : 'tag-green'}}">{{item.status === 'skipped' ? '已跳过' : '已提醒'}}</view>
+          <view class="tag {{item.status === 'skipped' ? 'tag-orange' : 'tag-green'}}">{{item.status === 'skipped' ? T.idx_skipped : T.idx_reminded}}</view>
         </view>
         <view class="small muted" style="margin-top:6rpx">{{item.atText}} · {{item.reasonText}}</view>
       </view>
@@ -54,20 +54,20 @@
 
     <view class="card sort-card">
       <view class="row-between">
-        <text class="small muted">排序</text>
+        <text class="small muted">{{T.idx_sort}}</text>
         <view class="row">
           <view class="seg">
-            <text class="seg-item {{sortMode === 'priority' ? 'seg-item-on' : ''}}" data-mode="priority" bindtap="onSort">按优先级</text>
-            <text class="seg-item {{sortMode === 'time' ? 'seg-item-on' : ''}}" data-mode="time" bindtap="onSort">按时间</text>
+            <text class="seg-item {{sortMode === 'priority' ? 'seg-item-on' : ''}}" data-mode="priority" bindtap="onSort">{{T.idx_sort_prio}}</text>
+            <text class="seg-item {{sortMode === 'time' ? 'seg-item-on' : ''}}" data-mode="time" bindtap="onSort">{{T.idx_sort_time}}</text>
           </view>
-          <text class="chip" bindtap="onToggleFilter">{{showFilter ? '收起筛选' : '筛选'}}</text>
+          <text class="chip" bindtap="onToggleFilter">{{showFilter ? T.idx_filter_hide : T.idx_filter}}</text>
         </view>
       </view>
 
       <block wx:if="{{showFilter}}">
         <view class="divider"></view>
         <view class="row-between" style="margin-top:8rpx">
-          <text class="small muted">优先级</text>
+          <text class="small muted">{{T.idx_prio_prefix}}</text>
           <view class="row">
             <text
               wx:for="{{priorityFilters}}"
@@ -80,43 +80,43 @@
         </view>
 
         <view class="row-between" style="margin-top:16rpx">
-          <text class="small muted">日期范围</text>
+          <text class="small muted">{{T.idx_date_range}}</text>
           <view class="row">
             <picker mode="date" value="{{dateFrom}}" bindchange="onDateFrom">
-              <text class="chip">{{dateFrom || '开始'}}</text>
+              <text class="chip">{{dateFrom || T.idx_start}}</text>
             </picker>
             <text class="small muted">~</text>
             <picker mode="date" value="{{dateTo}}" bindchange="onDateTo">
-              <text class="chip">{{dateTo || '结束'}}</text>
+              <text class="chip">{{dateTo || T.idx_end}}</text>
             </picker>
           </view>
         </view>
 
         <view class="row-between" style="margin-top:16rpx">
-          <text class="small muted">时间范围</text>
+          <text class="small muted">{{T.idx_time_range}}</text>
           <view class="row">
             <picker mode="time" value="{{timeFrom}}" bindchange="onTimeFrom">
-              <text class="chip">{{timeFrom || '开始'}}</text>
+              <text class="chip">{{timeFrom || T.idx_start}}</text>
             </picker>
             <text class="small muted">~</text>
             <picker mode="time" value="{{timeTo}}" bindchange="onTimeTo">
-              <text class="chip">{{timeTo || '结束'}}</text>
+              <text class="chip">{{timeTo || T.idx_end}}</text>
             </picker>
           </view>
         </view>
 
         <view class="row-between" style="margin-top:16rpx">
-          <text class="small muted">{{filterText || '未设置筛选条件'}}</text>
-          <text class="link" bindtap="onClearFilter">重置</text>
+          <text class="small muted">{{filterText || T.idx_no_filter}}</text>
+          <text class="link" bindtap="onClearFilter">{{T.idx_reset}}</text>
         </view>
       </block>
     </view>
 
-    <view wx:if="{{loading}}" class="empty">加载中…</view>
+    <view wx:if="{{loading}}" class="empty">{{T.idx_loading}}</view>
 
     <view wx:if="{{!loading && activeList.length === 0}}" class="empty">
-      <view>还没有进行中的待办</view>
-      <view class="small" style="margin-top:16rpx">点右上角「新建」添加第一条 · 新增时可勾选「需要手工确认完成」</view>
+      <view>{{T.idx_empty_title}}</view>
+      <view class="small" style="margin-top:16rpx">{{T.idx_empty_desc}}</view>
     </view>
 
     <view
@@ -137,18 +137,18 @@
       </view>
       <!-- 标签合并成一行并允许换行：少一整行 + 一行 margin，是压缩卡片高度的关键 -->
       <view class="row todo-tags" style="margin-top:8rpx">
-        <view class="tag priority-{{item.priority}}">优先级 {{item.priorityText}}</view>
-        <view wx:if="{{item.needDone}}" class="tag tag-red">待确认完成</view>
-        <view wx:if="{{item.shared}}" class="tag tag-purple">协作</view>
-        <view wx:if="{{item.hasAttach}}" class="tag tag-indigo">附件</view>
+        <view class="tag priority-{{item.priority}}">{{T.idx_prio_prefix}} {{item.priorityText}}</view>
+        <view wx:if="{{item.needDone}}" class="tag tag-red">{{T.mp_idx_pending}}</view>
+        <view wx:if="{{item.shared}}" class="tag tag-purple">{{T.idx_shared}}</view>
+        <view wx:if="{{item.hasAttach}}" class="tag tag-indigo">{{T.idx_attach}}</view>
         <view class="tag tag-gray">{{item.skipHolidayText}}</view>
       </view>
       <view wx:if="{{item.note}}" class="small muted note">{{item.note}}</view>
       <view class="todo-divider"></view>
       <view class="row-between">
-        <text class="small muted">{{item.needDone ? '提醒已发完' : '下次提醒'}}</text>
+        <text class="small muted">{{item.needDone ? T.idx_sent_done : T.mp_idx_next}}</text>
         <text wx:if="{{!item.needDone}}" class="small next-text">{{item.nextText}}</text>
-        <text wx:else class="small pending-text">等你确认做完</text>
+        <text wx:else class="small pending-text">{{T.idx_wait_confirm}}</text>
       </view>
       <!-- catchtap：点完成/删除都不触发卡片跳转与根节点冒泡（额度在 handler 里自己补） -->
       <view wx:if="{{!batchMode}}" class="row todo-actions">
@@ -157,25 +157,25 @@
           catchtap="onDoneTap"
           data-id="{{item.id}}"
           data-title="{{item.title}}"
-        >{{item.needDone ? '✓ 确认做完了' : '标记完成'}}</view>
+        >{{item.needDone ? T.idx_confirm_done : T.idx_mark_done}}</view>
         <view
           class="del-btn"
           catchtap="onDeleteTap"
           data-id="{{item.id}}"
           data-title="{{item.title}}"
-        >删除</view>
+        >{{T.mp_idx_delete}}</view>
       </view>
     </view>
 
     <!-- 批量操作条：浮在自定义 tabBar 上方；两行布局避免删除/确认完成挤成折行 -->
     <view wx:if="{{batchMode}}" class="batch-bar">
       <view class="row-between">
-        <text class="small batch-count">已选 {{selectedCount}} 条</text>
-        <text class="chip" bindtap="closeBatch">取消</text>
+        <text class="small batch-count">{{selectedCountText}}</text>
+        <text class="chip" bindtap="closeBatch">{{T.cancel}}</text>
       </view>
       <view class="row batch-actions">
-        <view class="btn btn-batch btn-danger btn-batch-del {{selectedCount === 0 || batchBusy ? 'btn-saving' : ''}}" bindtap="onBatchDelete">删除{{selectedCount > 0 ? ' ' + selectedCount + ' 条' : ''}}</view>
-        <view class="btn btn-batch {{selectedCount === 0 || batchBusy ? 'btn-saving' : ''}}" bindtap="onBatchConfirm">确认完成{{selectedCount > 0 ? ' ' + selectedCount + ' 条' : ''}}</view>
+        <view class="btn btn-batch btn-danger btn-batch-del {{selectedCount === 0 || batchBusy ? 'btn-saving' : ''}}" bindtap="onBatchDelete">{{batchDeleteText}}</view>
+        <view class="btn btn-batch {{selectedCount === 0 || batchBusy ? 'btn-saving' : ''}}" bindtap="onBatchConfirm">{{batchConfirmText}}</view>
       </view>
     </view>
 

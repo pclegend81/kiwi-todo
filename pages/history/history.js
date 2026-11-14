@@ -3,6 +3,9 @@ const core = require('../../utils/reminder-core')
 const reminders = require('../../utils/reminders')
 const subscribe = require('../../utils/subscribe')
 const { onShareAppMessage } = require('../../utils/share')
+const i18n = require('../../utils/i18n')
+
+const t = (key, vars) => i18n.t(key, vars)
 
 const app = getApp()
 
@@ -15,6 +18,17 @@ const PRIORITY_FILTERS = [
 
 // 苹果日历风格：周日开头
 const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+
+/** 日历表头星期按当前语言显示；不支持时回落中文（reminder-core 零改动） */
+function weekLabels() {
+  try {
+    const out = []
+    for (let i = 0; i < 7; i++) {
+      out.push(new Date(2024, 0, 7 + i).toLocaleDateString(i18n.locale(), { weekday: 'short' }))
+    }
+    return out
+  } catch (e) { return WEEK_LABELS }
+}
 
 /** 'YYYY-MM-DD' -> 'MM-DD'：筛选行胶囊要短，否则一行放不下 */
 function shortDate(v) {
@@ -52,6 +66,9 @@ Page({
   onAnyTap: subscribe.onAnyTap,
   onShareAppMessage: onShareAppMessage,
   data: {
+    T: {},
+    lang: 'zh-CN',
+    totalText: '',
     signedIn: false,
     loading: false,
     logs: [],
@@ -80,9 +97,24 @@ Page({
     finishedItems: [],
   },
 
+  /** 注入当前语言字典 + 星期表头 + 筛选器 + 计数文案 */
+  applyLangTexts() {
+    i18n.applyPage(this)
+    this.setData({
+      weekLabels: weekLabels(),
+      totalText: t('hist_total', { n: this.data.total || 0 }),
+      priorityFilters: PRIORITY_FILTERS.map((f) => ({
+        key: f.key,
+        name: f.key === 'all' ? t('f_all_s') : t('prio_' + f.key),
+      })),
+    })
+  },
+
   onShow() {
+    this.applyLangTexts()
     if (typeof this.getTabBar === 'function' && this.getTabBar()) {
       this.getTabBar().setData({ selected: 1 })
+      if (typeof this.getTabBar().applyLang === 'function') this.getTabBar().applyLang()
     }
     // 从编辑页回来可能把某条已结束的待办重新激活了，必须重拉一遍
     if (!this._raw || this._needReload || app.globalData.todosDirty) {
@@ -185,7 +217,7 @@ Page({
       list.sort((a, b) => (b.at || 0) - (a.at || 0))
     }
 
-    this.setData({ logs: list, total: list.length })
+    this.setData({ logs: list, total: list.length, totalText: t('hist_total', { n: list.length }) })
     this.updateFilterText(list.length, raw.length)
     this.refreshCalendar(list)
 
