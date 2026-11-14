@@ -4,22 +4,24 @@ const reminders = require('../../utils/reminders')
 const subscribe = require('../../utils/subscribe')
 const { onShareAppMessage } = require('../../utils/share')
 const i18n = require('../../utils/i18n')
+const fmt = require('../../utils/i18n-format')
 
 const t = (key, vars) => i18n.t(key, vars)
 
 const app = getApp()
 
+// 只存字典键，真正的显示名在 applyLangTexts() 里按当前语言生成
 const PRIORITY_FILTERS = [
-  { key: 'all', name: '全部' },
-  { key: 'high', name: '高' },
-  { key: 'medium', name: '中' },
-  { key: 'low', name: '低' },
+  { key: 'all', labelKey: 'f_all_s' },
+  { key: 'high', labelKey: 'prio_high' },
+  { key: 'medium', labelKey: 'prio_medium' },
+  { key: 'low', labelKey: 'prio_low' },
 ]
 
-// 苹果日历风格：周日开头
-const WEEK_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+// 苹果日历风格：周日开头。Intl 不可用时用的中性兜底，不放任何语言字样
+const WEEK_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
-/** 日历表头星期按当前语言显示；不支持时回落中文（reminder-core 零改动） */
+/** 日历表头星期按当前语言显示；不支持 Intl 时用中性兜底 */
 function weekLabels() {
   try {
     const out = []
@@ -105,7 +107,7 @@ Page({
       totalText: t('hist_total', { n: this.data.total || 0 }),
       priorityFilters: PRIORITY_FILTERS.map((f) => ({
         key: f.key,
-        name: f.key === 'all' ? t('f_all_s') : t('prio_' + f.key),
+        name: t(f.labelKey),
       })),
     })
   },
@@ -141,7 +143,7 @@ Page({
     this.setData({ signedIn: true })
     const [res, todoRes] = await Promise.all([store.listLogsAll(), store.listTodos()])
     if (res.error) {
-      wx.showToast({ title: '提醒记录加载失败', icon: 'none' })
+      wx.showToast({ title: t('hist_load_fail'), icon: 'none' })
       this.setData({ loading: false })
       return
     }
@@ -152,9 +154,9 @@ Page({
         id: row.id,
         todoTitle: row.todo_title || '',
         priority: row.todo_priority || 'medium',
-        priorityText: core.priorityText(row.todo_priority || 'medium'),
+        priorityText: fmt.priorityText(row.todo_priority || 'medium'),
         at: ms,
-        atText: ms ? core.minuteKey(d) + ' ' + core.weekdayName(d) : '',
+        atText: ms ? core.minuteKey(d) + ' ' + fmt.weekday(d) : '',
         timeText: ms ? core.pad2(d.getHours()) + ':' + core.pad2(d.getMinutes()) : '',
         status: row.status,
         remark: row.remark || '',
@@ -167,8 +169,10 @@ Page({
     // 统一用 decorate 的 finished 判定，避免两处各写一套规则而漏掉一类。
     let holidayMap = app.globalData.holidayMap || {}
     if (Object.keys(holidayMap).length === 0) {
+      const region = i18n.region()
       const cached = store.readHolidayCache()
-      if (cached && cached.rows) holidayMap = core.buildHolidayMap(cached.rows)
+      const rows = (region === 'cn' && cached && cached.rows) ? cached.rows : []
+      holidayMap = core.buildHolidayMap(store.mergeActiveHolidays(rows, region))
     }
     this._finished = (todoRes.data || [])
       .map((t) => reminders.decorate(t, holidayMap))
@@ -185,7 +189,7 @@ Page({
           priority: item.priority,
           priorityText: item.priorityText,
           remindText: item.remindText,
-          doneText: manual ? '手工完成' : '自动完成',
+          doneText: manual ? t('manual_tag') : t('fmt_done_auto'),
           // 完整时间放小字行，别塞进胶囊标签：CJK 长文案会把同行的标签挤到换行。
           // 自动完成的没有 done_at，就不显示确认时间。
           doneAtText: manual && !isNaN(doneAt) && doneAt > 0
@@ -271,11 +275,11 @@ Page({
     this.setData({
       calYear: year,
       calMonth: month,
-      calTitle: year + '年' + (month + 1) + '月',
+      calTitle: t('ed_cal_month_title', { year: year, month: month + 1 }),
       calDays: days,
       calSelected: selected,
       calSelectedText: selDate
-        ? (month + 1) + '月' + selDate.getDate() + '日 ' + core.weekdayName(selDate)
+        ? fmt.dateLabel(selDate)
         : selected,
       dayLogs: dayList,
     })
@@ -344,18 +348,28 @@ Page({
   },
 
   updateFilterText(shown, total) {
-    let text = ''
+    const unlimited = t('ed_unlimited')
+    const parts = []
     if (this.data.filterPriority !== 'all') {
-      const hit = PRIORITY_FILTERS.filter((p) => p.key === this.data.filterPriority)[0]
-      text += (hit ? hit.name : '') + '优先级 · '
+      const hit = (this.data.priorityFilters || []).filter((p) => p.key === this.data.filterPriority)[0]
+      parts.push(t('hist_filter_prio', { name: hit ? hit.name : '' }))
     }
     if (this.data.dateFrom || this.data.dateTo) {
-      text += (this.data.dateFrom || '不限') + '~' + (this.data.dateTo || '不限') + ' · '
+      parts.push(t('hist_filter_range', {
+        from: this.data.dateFrom || unlimited,
+        to: this.data.dateTo || unlimited,
+      }))
     }
     if (this.data.timeFrom || this.data.timeTo) {
-      text += (this.data.timeFrom || '不限') + '~' + (this.data.timeTo || '不限') + ' · '
+      parts.push(t('hist_filter_range', {
+        from: this.data.timeFrom || unlimited,
+        to: this.data.timeTo || unlimited,
+      }))
     }
-    this.setData({ filterText: text ? text.replace(/ · $/, '') + '（' + shown + '/' + total + '）' : '' })
+    const text = parts.length
+      ? parts.join(t('hist_filter_sep')) + t('hist_filter_count', { shown: shown, total: total })
+      : ''
+    this.setData({ filterText: text })
   },
 
   onToggleFilter() {
@@ -434,27 +448,27 @@ Page({
 
   onLongPress(e) {
     const id = e.currentTarget.dataset.id
-    const title = e.currentTarget.dataset.title || '这条记录'
+    const title = e.currentTarget.dataset.title || t('hist_this_record')
     const self = this
     wx.showActionSheet({
-      itemList: ['删除这条记录'],
+      itemList: [t('hist_delete_item')],
       success(res) {
         if (res.tapIndex !== 0) return
         wx.showModal({
-          title: '删除提醒记录',
-          content: '确定删除「' + title + '」的这条提醒记录？',
+          title: t('hist_delete_title'),
+          content: t('hist_delete_content', { title: title }),
           async success(confirm) {
             if (!confirm.confirm) return
             const result = await store.removeLog(id)
             if (result.error) {
-              wx.showToast({ title: '删除失败', icon: 'none' })
+              wx.showToast({ title: t('hist_delete_fail'), icon: 'none' })
               return
             }
             if (!result.data || result.data.length === 0) {
-              wx.showToast({ title: '没有权限删除这条记录', icon: 'none' })
+              wx.showToast({ title: t('hist_delete_no_perm'), icon: 'none' })
               return
             }
-            wx.showToast({ title: '已删除', icon: 'success' })
+            wx.showToast({ title: t('hist_deleted'), icon: 'success' })
             self.reload()
           },
         })

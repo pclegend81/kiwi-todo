@@ -2,6 +2,7 @@ const store = require('../../utils/store')
 const core = require('../../utils/reminder-core')
 const subscribe = require('../../utils/subscribe')
 const i18n = require('../../utils/i18n')
+const fmt = require('../../utils/i18n-format')
 const { onShareAppMessage } = require('../../utils/share')
 
 const app = getApp()
@@ -21,7 +22,7 @@ function weekdayOf(day) {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate())
       .toLocaleDateString(i18n.locale(), { weekday: 'short' })
   } catch (e) {
-    return core.weekdayName(d)
+    return fmt.weekday(d)
   }
 }
 

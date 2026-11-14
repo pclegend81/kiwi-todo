@@ -2,10 +2,12 @@
  * 多语言 / 地区节假日 / 当地社交登录 回归测试
  *   node tests/i18n.js
  *
- * 重点锁住这次改造最容易回退的三件事：
+ * 重点锁住这次改造最容易回退的四件事：
  *  1. 11 种语言的字典必须齐全、占位符一致，Web 与小程序共享文件 md5 一致；
  *  2. **选择语言必须真的切换对应地区的节假日表**（不是只换界面文字）；
- *  3. 小程序端切换语言要作废 holidayMap 缓存，且非中国大陆地区绝不回灌公共表。
+ *  3. 小程序端切换语言要作废 holidayMap 缓存，且非中国大陆地区绝不回灌公共表；
+ *  4. 6 个页面（含编辑页 / 邀请页 / 历史页）的可见文案全部走字典，
+ *    历史页 / 编辑页的 holidayMap 兜底必须按当前 region 重建，不能用 CN 缓存复活。
  */
 const fs = require('fs')
 const path = require('path')
@@ -54,7 +56,7 @@ test('基础字典 129 键 × 11 语言完整，无缺失无多余', () => {
 
 test('补充字典每个键 11 个值齐全，且占位符在 11 种语言一致', () => {
   const keys = Object.keys(extra.ROWS)
-  assert.ok(keys.length >= 190, '补充字典键数异常：' + keys.length)
+  assert.ok(keys.length >= 400, '补充字典键数异常：' + keys.length)
   const placeholders = (v) => (String(v).match(/\{\w+\}/g) || []).sort().join(',')
   for (const k of keys) {
     const row = extra.ROWS[k]
@@ -119,6 +121,47 @@ test('语言 → 地区 → 节假日：切到日语真的换成日本祝日表'
     const diff = Object.keys(m).filter((d) => m[d] !== cn[d]).length
     assert.ok(diff > Object.keys(m).length / 2, rg + ' 与 cn 表几乎相同，疑似未切换')
   }
+})
+
+test('行为级：store.mergeActiveHolidays 按 region 真的换表，非中国大陆忽略云端行', () => {
+  const Module = require('module')
+  const origLoad = Module._load
+  const fakeDb = {}
+  const fakeCloud = { init() {}, database() { return fakeDb }, callFunction() {} }
+  global.wx = {
+    cloud: fakeCloud,
+    getStorageSync() { return '' },
+    setStorageSync() {},
+  }
+  Module._load = function (request, parent) {
+    if (parent && /utils[\\/]store\.js$/.test(parent.filename || '') && request === './cloud') {
+      return { db: fakeDb, cloud: fakeCloud, callFunction: () => Promise.resolve({}) }
+    }
+    return origLoad.apply(this, arguments)
+  }
+  let store
+  try {
+    delete require.cache[require.resolve('../utils/store')]
+    store = require('../utils/store')
+  } finally {
+    Module._load = origLoad
+    delete global.wx
+  }
+  const has = (rows, day) => rows.some((r) => r.day === day)
+  const cn = store.mergeActiveHolidays([], 'cn')
+  const jp = store.mergeActiveHolidays([], 'jp')
+  const kr = store.mergeActiveHolidays([], 'kr')
+  assert.strictEqual(has(cn, '2027-10-01'), true, '中国大陆表丢了国庆节')
+  assert.strictEqual(has(jp, '2027-02-23'), true, '日本表没切过来（天皇誕生日）')
+  assert.strictEqual(has(cn, '2027-02-23'), false, '中国大陆表里混进了日本假日')
+  assert.strictEqual(has(jp, '2027-10-01'), false, '日本表里还留着中国国庆')
+  assert.strictEqual(has(kr, '2027-03-01'), true, '韩国表没切过来（三一節）')
+  // 非中国大陆地区绝不读云端公共表：塞一条中国口径的行进去也不该出现
+  const polluted = store.mergeActiveHolidays([{ day: '2027-10-01', name: '国庆节', kind: 'holiday' }], 'jp')
+  assert.strictEqual(has(polluted, '2027-10-01'), false, '非中国地区用了云端公共 holidays 行')
+  // 中国大陆路径仍能用云端行覆盖，原有能力不能丢
+  const cnOverride = store.mergeActiveHolidays([{ day: '2027-10-01', name: '自定义', kind: 'workday' }], 'cn')
+  assert.strictEqual(cnOverride.filter((r) => r.day === '2027-10-01')[0].kind, 'workday')
 })
 
 test('webapp/app.js 的 holidayMap 由 region 构建，切换语言会重建', () => {
@@ -218,15 +261,77 @@ test('小程序首页/节假日页按地区取表，非中国大陆不读写公�
   assert.ok(store.includes('const SEED_HOLIDAYS = HOLIDAYS_2027'))
 })
 
-test('小程序 4 个主要页面 WXML 无残留写死的可见中文', () => {
-  for (const f of ['pages/mine/mine.wxml', 'pages/index/index.wxml', 'pages/holidays/holidays.wxml']) {
-    const lines = read(f).split('\n').filter((l) => /[\u4e00-\u9fff]/.test(l) &&
-      !l.trim().startsWith('<!--'))
-    assert.deepStrictEqual(lines, [], f + ' 仍有中文：' + lines.slice(0, 2).join(' | '))
+test('小程序 6 个页面 WXML 无残留写死的可见中文（注释不算）', () => {
+  const files = ['pages/mine/mine.wxml', 'pages/index/index.wxml',
+    'pages/holidays/holidays.wxml', 'pages/history/history.wxml',
+    'pages/edit/edit.wxml', 'pages/invite/invite.wxml']
+  for (const f of files) {
+    const body = read(f).replace(/<!--[\s\S]*?-->/g, '')
+    const lines = body.split('\n').filter((l) => /[\u4e00-\u9fff]/.test(l))
+    assert.deepStrictEqual(lines, [], f + ' 仍有可见中文：' + lines.slice(0, 2).join(' | '))
   }
-  const hist = read('pages/history/history.wxml').split('\n')
-    .filter((l) => /[\u4e00-\u9fff]/.test(l) && !l.trim().startsWith('<!--'))
-  assert.ok(hist.length <= 2, '历史页仍有较多写死中文：' + hist.length)
+})
+
+test('所有页面 JS 的用户可见提示都走字典，不再写死中文', () => {
+  const files = ['pages/index/index.js', 'pages/history/history.js', 'pages/mine/mine.js',
+    'pages/holidays/holidays.js', 'pages/edit/edit.js', 'pages/invite/invite.js',
+    'custom-tab-bar/index.js']
+  for (const f of files) {
+    const lines = read(f).split('\n').filter((l) => /[\u4e00-\u9fff]/.test(l) &&
+      /showToast|showModal|showLoading|showActionSheet|NavigationBarTitle/.test(l) &&
+      !/^\s*(\/\/|\/\*|\*|<!--)/.test(l))
+    assert.deepStrictEqual(lines, [], f + ' 仍有中文提示：' + lines.slice(0, 2).join(' | '))
+  }
+})
+
+test('展示格式化层接管 reminder-core 的中文输出，且自身不写死中文', () => {
+  const js = read('utils/i18n-format.js')
+  const names = ['weekday', 'weekHead', 'dateLabel', 'priorityText', 'repeatNames',
+    'actionNames', 'priorityNames', 'intervalUnit', 'describeRepeat',
+    'describeRepeatRange', 'describeRepeatDates']
+  for (const n of names) assert.ok(js.includes(n + ': ' + n), '缺导出 ' + n)
+  const cjk = js.split('\n').filter((l) => /[\u4e00-\u9fff]/.test(l) &&
+    !/^\s*(\/\/|\/\*|\*)/.test(l))
+  assert.deepStrictEqual(cjk, [], 'i18n-format 不应写死中文')
+  for (const f of ['pages/edit/edit.js', 'pages/invite/invite.js', 'pages/history/history.js']) {
+    const s = read(f)
+    assert.ok(!/core\.(describeRepeat|describeRepeatRange|describeRepeatDates|priorityText)\(/.test(s),
+      f + ' 展示层仍在直调返回中文的 core 函数')
+  }
+})
+
+test('历史页 / 编辑页的 holidayMap 兜底按当前地区重建（切语言不再落回中国大陆表）', () => {
+  const hist = read('pages/history/history.js')
+  const edit = read('pages/edit/edit.js')
+  for (const [name, s] of [['history', hist], ['edit', edit]]) {
+    assert.ok(s.includes('i18n.region()'), name + ' 未取当前地区')
+    assert.ok(/mergeActiveHolidays\(rows, region\)/.test(s), name + ' 未按地区合并节假日表')
+    assert.ok(/core\.buildHolidayMap\(store\.mergeActiveHolidays/.test(s), name + ' 地区表未进 holidayMap')
+    assert.ok(/region === 'cn' && cached && cached\.rows/.test(s), name + ' 非中国地区不能拿 CN 缓存覆盖')
+  }
+  assert.ok(edit.includes('ensureHolidayMap()'), '编辑页缺地区节假日兜底方法')
+  const onLoad = edit.slice(edit.indexOf('onLoad(options)'), edit.indexOf('onShareAppMessage()'))
+  assert.ok(onLoad.includes('this.ensureHolidayMap()'), 'onLoad 未先建地区节假日表')
+  assert.ok(/onLangChanged\(code\)[\s\S]{0,400}this\.ensureHolidayMap\(\)/.test(edit),
+    '切语言未重建地区节假日表')
+  assert.ok(edit.includes('typeof store.mergeActiveHolidays'), '兜底需兼容测试 stub，避免直调不存在的 API')
+})
+
+test('编辑页 / 邀请页切语言会重算文案，节假日标签按地区名动态生成', () => {
+  for (const f of ['pages/edit/edit.js', 'pages/invite/invite.js']) {
+    const s = read(f)
+    assert.ok(s.includes('i18n.applyPage(this)'), f + ' 未注入字典')
+    assert.ok(s.includes('_lastLang'), f + ' 未检测语言变化')
+    assert.ok(s.includes('onLangChanged('), f + ' 未实现 onLangChanged')
+  }
+  const edit = read('pages/edit/edit.js')
+  assert.ok(edit.includes("t('ed_holiday_skip', { name: i18n.regionName() })"),
+    '节假日跳过标签未按地区名生成')
+  assert.ok(read('pages/edit/edit.wxml').includes('{{holidaySkipText}}'), 'WXML 未使用动态地区标签')
+  const rows = require('../webapp/i18n-extra.js').ROWS
+  assert.ok(rows.ed_holiday_skip.every((v) => v.includes('{name}')), '地区名占位符在 11 语言里不齐')
+  assert.strictEqual(mpi18n.t('ed_holiday_skip', { name: mpi18n.t('region_name', {}, 'zh-CN') }, 'zh-CN'),
+    '中国大陆节假日跳过', '中国大陆口径不能被改坏')
 })
 
 test('自定义 tabBar 跟随语言，3 个 tab 页 onShow 都会刷新文案', () => {

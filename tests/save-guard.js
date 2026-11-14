@@ -194,7 +194,7 @@ async function main() {
   const appWxss = read('app.wxss')
   check('编辑页有 saving 锁 + 保存中遮罩', () => {
     assert.ok(/if \(this\.data\.saving\) return/.test(editJs))
-    assert.ok(/wx\.showLoading\(\{ title: '保存中…', mask: true \}\)/.test(editJs))
+    assert.ok(/wx\.showLoading\(\{ title: (?:'保存中…'|t\('saving'\)), mask: true \}\)/.test(editJs))
     assert.ok(/setData\(\{ saving: true \}\)/.test(editJs))
   })
   check('保存只等一次写库，且写库成功才返回', () => {
@@ -211,11 +211,11 @@ async function main() {
   })
   check('新建写入带 client_token，失败会解锁重试', () => {
     assert.ok(/todo\.client_token = this\.saveToken/.test(editJs))
-    assert.ok(/fail\(\(e && e\.message\) \|\| '保存失败，请重试'\)/.test(editJs))
+    assert.ok(/fail\(\(e && e\.message\) \|\| (?:'保存失败，请重试'|t\('ed_save_fail_retry'\))\)/.test(editJs))
     assert.ok(/insertInflight/.test(storeJs) && /client_token: token/.test(storeJs))
   })
   check('按钮与全局样式有保存中态', () => {
-    assert.ok(/saving \? '保存中…' : saveText/.test(editWxml))
+    assert.ok(/saving \? (?:'保存中…'|T\.saving) : saveText/.test(editWxml))
     assert.ok(/\.btn-saving\s*\{/.test(appWxss))
   })
 

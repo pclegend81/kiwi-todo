@@ -191,8 +191,9 @@ async function main() {
   check('首页待办列表下方不再有「提醒」说明横幅（用户要求去掉）', () => {
     // 之前那条底部提示已移除
     assert.ok(!/默认提醒发完就自动完成并归档/.test(indexWxml))
-    // 「需要手工确认完成」开关标签仍在（编辑页 + 首页空态提示）
-    assert.ok(/需要手工确认完成/.test(indexWxml) || /需要手工确认完成/.test(editWxml))
+    // 「需要手工确认完成」开关标签仍在（多语言改造后走字典键 T.*）
+    assert.ok(/需要手工确认完成|T\.f_manual|T\.ed_manual_hint|T\.idx_pending_short/.test(indexWxml) ||
+      /需要手工确认完成|T\.f_manual|T\.ed_manual_hint/.test(editWxml))
     assert.ok(!/提醒到点不会自动算完成/.test(indexWxml))
   })
 
@@ -203,7 +204,8 @@ async function main() {
   })
 
   check('提醒记录页用「手工完成 / 自动完成」区分，只有手工完成显示确认时间', () => {
-    assert.ok(/doneText: manual \? '手工完成' : '自动完成'/.test(historyJs))
+    // 两种完成都要能区分：原中文写法 / 多语言字典写法
+    assert.ok(/doneText: manual \? (?:'手工完成'|t\('manual_tag'\)) : (?:'自动完成'|t\('fmt_done_auto'\))/.test(historyJs))
     assert.ok(/const manual = item\.status === 'done'/.test(historyJs))
     assert.ok(/doneAtText: manual && !isNaN\(doneAt\) && doneAt > 0/.test(historyJs))
     assert.ok(/已完成的待办|T\.hist_finished_prefix/.test(historyWxml))
@@ -213,7 +215,7 @@ async function main() {
   /* ── 4. 编辑页开关 ─────────────────────────────────────────────── */
 
   check('新增页有「需要手工确认完成」开关，且默认关闭', () => {
-    assert.ok(/需要手工确认完成/.test(editWxml))
+    assert.ok(/需要手工确认完成|T\.f_manual|T\.ed_manual_hint/.test(editWxml))
     assert.ok(/<switch checked="\{\{manualDone\}\}"[^>]*bindchange="onManualDone"/.test(editWxml))
     assert.ok(/manualDone: false,/.test(editJs))
     const onLoadAt = editJs.indexOf('onLoad(options)')

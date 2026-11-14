@@ -25,9 +25,9 @@ Component({
   data: {
     selected: 0,
     list: [
-      { pagePath: 'pages/index/index', text: '待办' },
-      { pagePath: 'pages/history/history', text: '提醒记录' },
-      { pagePath: 'pages/mine/mine', text: '我的' },
+      { pagePath: 'pages/index/index', text: tabTexts()[0] },
+      { pagePath: 'pages/history/history', text: tabTexts()[1] },
+      { pagePath: 'pages/mine/mine', text: tabTexts()[2] },
     ],
   },
 
@@ -79,7 +79,7 @@ Component({
         fail: (err) => {
           if (index !== prev) this.setData({ selected: prev })
           console.error('[tabbar] switchTab 失败', url, err)
-          wx.showToast({ title: '切换失败：' + ((err && err.errMsg) || '未知错误'), icon: 'none' })
+          wx.showToast({ title: i18n.t('idx2_tab_fail', { err: ((err && err.errMsg) || i18n.t('idx2_unknown')) }), icon: 'none' })
         },
       })
     },

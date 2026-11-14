@@ -10,11 +10,12 @@ const t = (key, vars) => i18n.t(key, vars)
 
 const app = getApp()
 
+// 只存字典键，真正的显示名在 applyLangTexts() 里按当前语言生成
 const PRIORITY_FILTERS = [
-  { key: 'all', name: '全部' },
-  { key: 'high', name: '高' },
-  { key: 'medium', name: '中' },
-  { key: 'low', name: '低' },
+  { key: 'all', labelKey: 'f_all_s' },
+  { key: 'high', labelKey: 'prio_high' },
+  { key: 'medium', labelKey: 'prio_medium' },
+  { key: 'low', labelKey: 'prio_low' },
 ]
 
 /** 用来排序/筛选的时间戳：优先用下一次提醒时刻，没有则用首次提醒时刻 */
@@ -116,7 +117,7 @@ Page({
       loginText: t('mp_login_btn'),
       priorityFilters: PRIORITY_FILTERS.map((f) => ({
         key: f.key,
-        name: f.key === 'all' ? t('f_all_s') : t('prio_' + f.key),
+        name: t(f.labelKey),
       })),
     })
     this.setData(this.langCountTexts())
@@ -380,18 +381,28 @@ Page({
   },
 
   updateFilterText(shown, total) {
-    let text = ''
+    const unlimited = t('ed_unlimited')
+    const parts = []
     if (this.data.filterPriority !== 'all') {
-      const hit = PRIORITY_FILTERS.filter((p) => p.key === this.data.filterPriority)[0]
-      text += (hit ? hit.name : '') + '优先级 · '
+      const hit = (this.data.priorityFilters || []).filter((p) => p.key === this.data.filterPriority)[0]
+      parts.push(t('hist_filter_prio', { name: hit ? hit.name : '' }))
     }
     if (this.data.dateFrom || this.data.dateTo) {
-      text += (this.data.dateFrom || '不限') + '~' + (this.data.dateTo || '不限') + ' · '
+      parts.push(t('hist_filter_range', {
+        from: this.data.dateFrom || unlimited,
+        to: this.data.dateTo || unlimited,
+      }))
     }
     if (this.data.timeFrom || this.data.timeTo) {
-      text += (this.data.timeFrom || '不限') + '~' + (this.data.timeTo || '不限') + ' · '
+      parts.push(t('hist_filter_range', {
+        from: this.data.timeFrom || unlimited,
+        to: this.data.timeTo || unlimited,
+      }))
     }
-    this.setData({ filterText: text ? text.replace(/ · $/, '') + '（' + shown + '/' + total + '）' : '' })
+    const text = parts.length
+      ? parts.join(t('hist_filter_sep')) + t('hist_filter_count', { shown: shown, total: total })
+      : ''
+    this.setData({ filterText: text })
   },
 
   onToggleFilter() {
@@ -457,7 +468,7 @@ Page({
     if (error || !session) {
       this.setData({
         loginText: t('mp_login_btn'),
-        loginError: (error && error.message) || '登录失败，请重试',
+        loginError: (error && error.message) || t('idx2_login_fail'),
       })
       return
     }
@@ -481,7 +492,7 @@ Page({
     subscribe.renew()
     const visible = this.data.activeList || []
     if (!visible.length) {
-      wx.showToast({ title: '当前没有可勾选的待办', icon: 'none' })
+      wx.showToast({ title: t('idx2_no_todos_select'), icon: 'none' })
       return
     }
     this._selected = Object.create(null)
@@ -526,7 +537,7 @@ Page({
     if (this.data.batchBusy || this._doneBusy || this._deleteBusy || this._confirmPending) return
     const ids = selectedIds(this._selected)
     if (!ids.length) {
-      wx.showToast({ title: '请先勾选待办', icon: 'none' })
+      wx.showToast({ title: t('idx2_select_first'), icon: 'none' })
       return
     }
     // 必须在 showModal 之前的同步点击链里补额度，异步回调里发起会丢用户手势
@@ -536,17 +547,15 @@ Page({
       (item) => item.needDone && ids.indexOf(String(item.id)) !== -1
     ).length
     const rest = ids.length - pending
-    const extra = rest > 0
-      ? '\n其中 ' + rest + ' 条还有后续提醒，确认后也会一并停止提醒。'
-      : ''
+    const extra = rest > 0 ? t('idx2_batch_done_extra', { n: rest }) : ''
     const self = this
     // 弹窗停留期间别让连点再开第二个 showModal
     this._confirmPending = true
     wx.showModal({
-      title: '批量确认完成',
-      content: '将把选中的 ' + ids.length + ' 条待办标记为已完成，并移到「提醒记录」。' + extra,
-      confirmText: '确认完成',
-      cancelText: '再想想',
+      title: t('idx2_batch_done_title'),
+      content: t('idx2_batch_done_content', { n: ids.length, extra: extra }),
+      confirmText: t('idx2_confirm_done'),
+      cancelText: t('idx2_cancel_think'),
       success(res) {
         self._confirmPending = false
         if (res.confirm) self.batchDone(ids)
@@ -558,7 +567,7 @@ Page({
   async batchDone(ids) {
     this._doneBusy = true
     this.setData({ batchBusy: true })
-    wx.showLoading({ title: '正在确认…', mask: true })
+    wx.showLoading({ title: t('idx2_batch_done_loading'), mask: true })
     const patch = { status: 'done', done_at: new Date().toISOString() }
     try {
       const res = await store.batchUpdateTodos(
@@ -577,8 +586,8 @@ Page({
       setTimeout(() => {
         wx.showToast({
           title: failed > 0
-            ? ('已完成 ' + updated + ' 条，' + failed + ' 条失败请重试')
-            : ('已完成 ' + updated + ' 条'),
+            ? t('idx2_batch_done_partial', { n: updated, m: failed })
+            : t('idx2_batch_done_ok', { n: updated }),
           icon: 'none',
           duration: 2200,
         })
@@ -586,7 +595,7 @@ Page({
     } catch (e) {
       wx.hideLoading()
       this.setData({ batchBusy: false })
-      wx.showToast({ title: '操作失败，请重试', icon: 'none' })
+      wx.showToast({ title: t('idx2_batch_done_fail'), icon: 'none' })
     } finally {
       this._doneBusy = false
     }
@@ -602,7 +611,7 @@ Page({
     if (this.data.batchBusy || this._doneBusy || this._deleteBusy || this._confirmPending) return
     const ids = selectedIds(this._selected)
     if (!ids.length) {
-      wx.showToast({ title: '请先勾选待办', icon: 'none' })
+      wx.showToast({ title: t('idx2_select_first'), icon: 'none' })
       return
     }
     subscribe.renew()
@@ -610,17 +619,15 @@ Page({
     const shared = visible.filter(
       (item) => item.shared && ids.indexOf(String(item.id)) !== -1
     ).length
-    const extra = shared > 0
-      ? '\n其中 ' + shared + ' 条是协作待办，删除只影响你自己的列表。'
-      : ''
+    const extra = shared > 0 ? t('idx2_batch_del_shared', { n: shared }) : ''
     const self = this
     this._confirmPending = true
     wx.showModal({
-      title: '批量删除',
-      content: '确定删除选中的 ' + ids.length + ' 条待办？删除后不可恢复，历史提醒记录会保留。' + extra,
-      confirmText: '确认删除',
+      title: t('idx2_batch_del_title'),
+      content: t('idx2_batch_del_content', { n: ids.length, extra: extra }),
+      confirmText: t('idx2_batch_del_confirm'),
       confirmColor: '#d70015',
-      cancelText: '再想想',
+      cancelText: t('idx2_cancel_think'),
       success(res) {
         self._confirmPending = false
         if (res.confirm) self.batchDelete(ids)
@@ -632,7 +639,7 @@ Page({
   async batchDelete(ids) {
     this._deleteBusy = true
     this.setData({ batchBusy: true })
-    wx.showLoading({ title: '正在删除…', mask: true })
+    wx.showLoading({ title: t('idx2_batch_del_loading'), mask: true })
     try {
       const res = await store.batchDeleteTodos(ids)
       const removed = res && typeof res.removed === 'number' ? res.removed : ids.length
@@ -646,8 +653,8 @@ Page({
       setTimeout(() => {
         wx.showToast({
           title: failed > 0
-            ? ('已删除 ' + removed + ' 条，' + failed + ' 条失败请重试')
-            : ('已删除 ' + removed + ' 条'),
+            ? t('idx2_batch_del_partial', { n: removed, m: failed })
+            : t('idx2_batch_del_ok', { n: removed }),
           icon: 'none',
           duration: 2200,
         })
@@ -655,7 +662,7 @@ Page({
     } catch (e) {
       wx.hideLoading()
       this.setData({ batchBusy: false })
-      wx.showToast({ title: '删除失败，请重试', icon: 'none' })
+      wx.showToast({ title: t('idx2_batch_del_fail'), icon: 'none' })
     } finally {
       this._deleteBusy = false
     }
@@ -675,10 +682,10 @@ Page({
     // 长按也是用户手势：菜单弹出前同步补一次下发额度
     subscribe.renew()
     const id = e.currentTarget.dataset.id
-    const title = e.currentTarget.dataset.title || '该待办'
+    const title = e.currentTarget.dataset.title || t('idx2_that_todo')
     const self = this
     wx.showActionSheet({
-      itemList: ['编辑', '标记为已完成', '删除'],
+      itemList: [t('act_edit'), t('idx2_action_mark_done'), t('mp_idx_delete')],
       success(res) {
         if (res.tapIndex === 0) {
           wx.navigateTo({ url: '/pages/edit/edit?id=' + id })
@@ -701,16 +708,16 @@ Page({
   onDoneTap(e) {
     const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {}
     const id = dataset.id
-    const title = dataset.title || '这条待办'
+    const title = dataset.title || t('idx2_this_todo')
     if (!id || this._doneBusy) return
     subscribe.renew()
     this._doneBusy = true
     const self = this
     wx.showModal({
-      title: '确认完成',
-      content: '「' + title + '」已经做完了吗？确认后会停止提醒，并移到「提醒记录」。',
-      confirmText: '已完成',
-      cancelText: '还没',
+      title: t('idx2_confirm_done'),
+      content: t('idx2_done_content', { title: title }),
+      confirmText: t('f_done'),
+      cancelText: t('idx2_not_yet'),
       success(res) {
         if (res.confirm) self.markDone(id)
         else self._doneBusy = false
@@ -726,11 +733,11 @@ Page({
     })
     this._doneBusy = false
     if (error) {
-      wx.showToast({ title: '操作失败', icon: 'none' })
+      wx.showToast({ title: t('idx2_op_fail'), icon: 'none' })
       return
     }
     if (!data || data.length === 0) {
-      wx.showToast({ title: '没有权限修改这条待办', icon: 'none' })
+      wx.showToast({ title: t('idx2_no_perm_edit'), icon: 'none' })
       return
     }
     // 先本地移除，点击立刻有反馈，不等下一轮云端拉取
@@ -742,7 +749,7 @@ Page({
     this.refreshTodos()
     // showModal 刚关闭时直接 showToast 会被吞掉，稍等一下再给反馈
     setTimeout(() => {
-      wx.showToast({ title: '已标记完成', icon: 'success' })
+      wx.showToast({ title: t('idx2_marked_done'), icon: 'success' })
     }, 320)
   },
 
@@ -755,17 +762,17 @@ Page({
     if (this.data.batchBusy || this._deleteBusy || this._confirmPending) return
     const dataset = (e && e.currentTarget && e.currentTarget.dataset) || {}
     const id = dataset.id
-    const title = dataset.title || '这条待办'
+    const title = dataset.title || t('idx2_this_todo')
     if (!id) return
     subscribe.renew()
     const self = this
     this._confirmPending = true
     wx.showModal({
-      title: '删除待办',
-      content: '确定删除「' + title + '」？删除后不可恢复，历史提醒记录会保留。',
-      confirmText: '删除',
+      title: t('idx2_del_title'),
+      content: t('idx2_del_content', { title: title }),
+      confirmText: t('mp_idx_delete'),
       confirmColor: '#d70015',
-      cancelText: '再想想',
+      cancelText: t('idx2_cancel_think'),
       success(res) {
         self._confirmPending = false
         if (res.confirm) self.removeTodo(id)
@@ -780,11 +787,11 @@ Page({
     try {
       const { data, error } = await store.removeTodo(id)
       if (error) {
-        wx.showToast({ title: '删除失败', icon: 'none' })
+        wx.showToast({ title: t('idx2_del_fail'), icon: 'none' })
         return
       }
       if (!data || data.length === 0) {
-        wx.showToast({ title: '没有权限删除这条待办', icon: 'none' })
+        wx.showToast({ title: t('idx2_no_perm_delete'), icon: 'none' })
         return
       }
       this._activeRaw = (this._activeRaw || []).filter(
@@ -794,10 +801,10 @@ Page({
       app.globalData.todosDirty = true
       this.refreshTodos()
       setTimeout(() => {
-        wx.showToast({ title: '已删除', icon: 'success' })
+        wx.showToast({ title: t('idx2_deleted'), icon: 'success' })
       }, 320)
     } catch (e) {
-      wx.showToast({ title: '删除失败，请重试', icon: 'none' })
+      wx.showToast({ title: t('idx2_batch_del_fail'), icon: 'none' })
     } finally {
       this._deleteBusy = false
     }

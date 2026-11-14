@@ -3,14 +3,17 @@ const collab = require('../../utils/collab')
 const core = require('../../utils/reminder-core')
 const subscribe = require('../../utils/subscribe')
 const attachments = require('../../utils/attachments')
+const i18n = require('../../utils/i18n')
+const fmt = require('../../utils/i18n-format')
 
 const app = getApp()
+const t = (key, vars) => i18n.t(key, vars)
 
 /** 重复方式 + 生效日期范围，好友得看全规则再决定加不加入 */
 function describeRepeatWithRange(todo) {
-  const text = core.describeRepeat(todo)
-  const range = core.describeRepeatRange(todo)
-  return range ? text + '（' + range + '）' : text
+  const text = fmt.describeRepeat(todo)
+  const range = fmt.describeRepeatRange(todo)
+  return range ? text + t('fmt_range_paren', { range: range }) : text
 }
 
 /**
@@ -54,6 +57,17 @@ Page({
   },
 
   onShow() {
+    const lang = i18n.current()
+    const changed = !!this._lastLang && this._lastLang !== lang
+    this._lastLang = lang
+    i18n.applyPage(this)
+    if (changed) this.onLangChanged(lang)
+    else this.bootstrap()
+  },
+
+  onLangChanged(code) {
+    this._lastLang = code || i18n.current()
+    i18n.applyPage(this)
     this.bootstrap()
   },
 
@@ -69,7 +83,7 @@ Page({
     app.globalData.signedIn = signedIn
     self.setData({ signedIn: signedIn })
     if (!signedIn) {
-      self.setData({ loading: false, errorText: '登录失败，请退出小程序后重新打开邀请卡片' })
+      self.setData({ loading: false, errorText: t('inv_login_fail') })
       return
     }
     await self.loadDetail()
@@ -82,7 +96,7 @@ Page({
     if (error || !data) {
       self.setData({
         loading: false,
-        errorText: (error && error.message) || '邀请不存在或已关闭',
+        errorText: (error && error.message) || t('inv_not_found'),
       })
       return
     }
@@ -90,11 +104,11 @@ Page({
     const first = new Date(todo.remind_at)
     const remindText = isNaN(first.getTime())
       ? '—'
-      : core.dateKey(first) + ' ' + core.minuteKey(first) + ' ' + core.weekdayName(first)
-    let holidayText = '节假日照常提醒'
-    if (todo.repeat_type === 'restday') holidayText = '仅休息日提醒'
+      : core.dateKey(first) + ' ' + core.minuteKey(first) + ' ' + fmt.weekday(first)
+    let holidayText = t('inv_holiday_normal')
+    if (todo.repeat_type === 'restday') holidayText = t('inv_holiday_restday')
     else if (todo.skip_holiday) {
-      holidayText = todo.holiday_action === 'postpone' ? '节假日顺延' : '节假日跳过'
+      holidayText = todo.holiday_action === 'postpone' ? t('inv_holiday_postpone') : t('inv_holiday_skip')
     }
     self.setData({
       loading: false,
@@ -104,10 +118,10 @@ Page({
       location: todo.location || null,
       remindText: remindText,
       repeatText: describeRepeatWithRange(todo),
-      datesText: core.describeRepeatDates(todo, 10),
+      datesText: fmt.describeRepeatDates(todo, 10),
       holidayText: holidayText,
       priorityKey: String(todo.priority || 'medium'),
-      priorityText: core.priorityText(todo.priority || 'medium'),
+      priorityText: fmt.priorityText(todo.priority || 'medium'),
       memberCount: data.memberCount || 0,
       joined: !!data.joined,
       isOwner: !!data.isOwner,
@@ -124,7 +138,7 @@ Page({
     const rows = data.members || []
     self.setData({
       memberCount: rows.length,
-      memberNames: rows.map((m) => String(m.nickname || '好友')),
+      memberNames: rows.map((m) => String(m.nickname || t('inv_friend'))),
     })
   },
 
@@ -141,12 +155,12 @@ Page({
     const title = this.data.title
     if (inviteId) {
       return {
-        title: '邀请你一起提醒：' + (title || 'KIWI待办'),
+        title: t('inv_share_invite', { name: title || t('app_name') }),
         path: '/pages/invite/invite?invite=' + inviteId,
       }
     }
     return {
-      title: 'KIWI待办 · 重复提醒 + 节假日智能顺延',
+      title: t('inv_share_default'),
       path: '/pages/index/index',
     }
   },
@@ -161,13 +175,13 @@ Page({
     // 加入后要能真收到提醒，顺手把订阅授权补上——必须在 await 之前同步调用
     subscribe.renew()
     wx.showModal({
-      title: '加入协作提醒',
-      content: '填个称呼，创建者就能看到是谁加入了（不填也可以，会显示为「好友」）',
+      title: t('inv_join_title'),
+      content: t('inv_join_content'),
       editable: true,
-      placeholderText: '例如：小李',
+      placeholderText: t('inv_nickname_ph'),
       maxLength: 12,
-      confirmText: '加入',
-      cancelText: '取消',
+      confirmText: t('inv_join'),
+      cancelText: t('cancel'),
       async success(r) {
         if (!r || !r.confirm) return
         await self.doJoin(String(r.content || '').trim())
@@ -181,15 +195,15 @@ Page({
     const { data, error } = await collab.join(self.data.inviteId, nickname)
     self.setData({ busy: false })
     if (error || !data) {
-      wx.showToast({ title: (error && error.message) || '加入失败', icon: 'none' })
+      wx.showToast({ title: (error && error.message) || t('inv_join_fail'), icon: 'none' })
       return
     }
     self.setData({ joined: true, memberCount: (self.data.memberCount || 0) + 1 })
     wx.showModal({
-      title: '已加入协作提醒',
-      content: '这条待办已加到你的列表，到点会和其他人一起收到微信提醒。\n\n要正常收到通知，请到「我的」确认推送已开启。',
-      confirmText: '去开启',
-      cancelText: '知道了',
+      title: t('inv_joined_title'),
+      content: t('inv_joined_content'),
+      confirmText: t('inv_go_enable'),
+      cancelText: t('idx_got_it'),
       success(r) {
         if (r && r.confirm) {
           wx.switchTab({ url: '/pages/mine/mine' })

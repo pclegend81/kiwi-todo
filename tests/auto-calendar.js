@@ -353,9 +353,9 @@ async function main() {
   })
 
   check('编辑页 WXML 保留「手动补写」入口，用于失败重试 / 改时间后重写', () => {
-    assert.ok(/手机日历 · 手动补写/.test(editWxml))
+    assert.ok(/手机日历 · 手动补写|T\.ed_calendar_manual_title/.test(editWxml))
     assert.ok(/catchtap="onWriteCalendar"/.test(editWxml))
-    assert.ok(/新建保存时已默认写入/.test(editWxml))
+    assert.ok(/新建保存时已默认写入|T\.ed_calendar_manual_hint/.test(editWxml))
   })
 
   console.log(problems === 0 ? '\n全部通过（18 项）' : '\n失败 ' + problems + ' 项')

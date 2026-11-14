@@ -188,7 +188,7 @@ PC 专属能力：标题/备注搜索、侧栏计数与「下一次提醒」、�
 node tests/webapi.js     # 24 项：口令/token/CRUD/白名单/游标/幂等/归属
 node tests/webapp.js     # 18 项：模板编译/资源齐全/共享模块 md5/PWA 清单/登录链路
 node tests/oauth.js      # 34 项：八平台适配器/state 签名/PKCE/账号合并/未关联拦截
-node tests/i18n.js       # 19 项：11 语言字典/语言→地区→节假日联动/多副本 md5
+node tests/i18n.js       # 24 项：11 语言字典/语言→地区→节假日行为级校验/6 页文案覆盖/多副本 md5
 for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 17 个套件
 ```
 
@@ -311,11 +311,17 @@ https://<你的静态托管域名>/oauth-callback.html
   `localStorage.kiwi_web_lang`，首次访问按浏览器语言自动选；OAuth 回调页与
   Service Worker 缓存版本（`kiwi-web-v4`）同步。
 - **小程序**：「我的」页新增「语言 / Language」卡片（11 项 picker），选择存
-  `wx.Storage.kiwi_lang`；自定义 tabBar、待办页、提醒记录页、节假日维护页、
-  我的页的主要可见文案与 toast 均已走字典。编辑页 / 邀请页等二级页仍有部分中文，
-  如需 100% 覆盖可继续补。
-- 字典文件 `i18n.js` / `i18n-extra.js` / `holidays-region.js` 在 `webapp/` 与
-  `utils/` 各有一份，`tests/i18n.js` 会校验 md5 一致，防止两端翻译口径漂移。
+  `wx.Storage.kiwi_lang`。**6 个页面（待办 / 提醒记录 / 节假日维护 / 我的 /
+  编辑 / 邀请）+ 自定义 tabBar 的可见文案、toast、弹窗、提醒预览、滚轮选择器
+  已全部走字典**，`tests/i18n.js` 会扫 WXML 与 JS 的中文残留。
+- `utils/i18n-format.js` 是展示层薄封装：`reminder-core.js` 里返回中文的
+  `weekdayName / priorityText / describeRepeat / describeRepeatRange /
+  describeRepeatDates / INTERVAL_UNITS` 不能改（推送链路共用），由它按当前
+  语言重新实现一份给页面展示用，本身不写死任何中文。
+- 字典文件 `i18n.js`（129 键）/ `i18n-extra.js`（**407 键**）/
+  `holidays-region.js` 在 `webapp/` 与 `utils/` 各有一份，
+  全部 × 11 语言；`tests/i18n.js` 会校验 md5 一致、每键 11 值非空、
+  占位符在 11 语言里完全一致，防止两端翻译口径漂移。
 
 ### J-2 切换语言 = 切换当地法定节假日（本次重点）
 
@@ -328,6 +334,13 @@ https://<你的静态托管域名>/oauth-callback.html
 - 小程序 `app.setLang()` 会把 `holidaysLoaded` 置 false 并清空 `holidayMap`，
   首页 / 节假日页按 `store.regionSeed(region)` 重建；页面顶部显示「当前按 XX
   官方节假日显示」。
+- **兜底路径也是地区感知的**：提醒记录页在 `holidayMap` 为空时会用本地缓存
+  重建，编辑页冷启动直达或切语言后也会走 `ensureHolidayMap()`；这两处都改成
+  经 `store.mergeActiveHolidays(rows, i18n.region())` 重建，非中国大陆地区
+  **不会拿中国大陆缓存把当地表覆盖掉**。否则「切到日本語、节假日页是对的、
+  但编辑页月历和下次提醒仍按中国表」这种半切换状态会出现。
+- 编辑页「节假日跳过」标签按地区名动态生成（如「日本の祝日をスキップ」），
+  但**不承诺云端按当地跳过**，见下方限制。
 - **非中国大陆地区只读**：只展示本地地区表，**不读取、不回灌、不删除云端
   `holidays` 集合**。那是一张公共表、存的是中国大陆口径；若切语言就写回，
   会把所有用户的节假日表写脏。切回简体中文即恢复可自行维护。
@@ -353,13 +366,19 @@ https://<你的静态托管域名>/oauth-callback.html
 
 ### J-4 部署与验收
 
-1. 重新「上传并部署」`webapi` 云函数（BUILD 应为 `2026-11-13c`）；
-   `pusher` / `pushapi` **不用动**。
+1. 若**上一轮 8 个 OAuth 平台的版本还没部署**，先「上传并部署」`webapi`
+   （日志 BUILD 应为 `2026-11-13c`）；本轮只改端上代码，云函数零改动，
+   `pusher` / `pushapi` 从头到尾都不用动。
 2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**（含新增的
    `i18n.js` / `i18n-extra.js` / `holidays-region.js`）重新上传到静态托管；
    Service Worker 已升 v4，老设备刷新两次会拿到新资源。
-3. 小程序重新编译上传（新增 `utils/i18n*.js`、`utils/holidays-region.js`）。
+3. 小程序重新编译上传（本轮新增/改动：`utils/i18n*.js`、
+   `utils/holidays-region.js`、**`utils/i18n-format.js`**，以及 6 个页面的
+   `.js`/`.wxml` 与 `custom-tab-bar/index.js`）。`webapi` / `pusher` / `pushapi`
+   这一轮零改动，不需要重新部署。
 4. 验收：切到日本語 → 界面变日文、侧栏显示「日本」、节假日页出现
-   `2027-02-23 天皇誕生日` 而不再有中国春节调休；登录页若配了 LINE 凭证
+   `2027-02-23 天皇誕生日` 而不再有中国春节调休；新建/编辑页的月历「休/班」
+   标记、提醒预览、批量确认与删除弹窗也应是日文；登录页若配了 LINE 凭证
    应出现 LINE 按钮，切回简体中文则显示微信网页登录按钮。
-5. 本地跑 `node tests/i18n.js`，19 项全绿才说明联动没回退。
+5. 本地跑 `node tests/i18n.js`（**24 项**，含 `store.mergeActiveHolidays` 的
+   行为级换表校验）与全量 17 个套件，全绿才说明联动与文案覆盖没回退。

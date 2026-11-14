@@ -6,23 +6,25 @@ const attachments = require('../../utils/attachments')
 const calendar = require('../../utils/calendar')
 const saveGuard = require('../../utils/save-guard')
 const { SHARE_TITLE, SHARE_PATH } = require('../../utils/share')
+const i18n = require('../../utils/i18n')
+const fmt = require('../../utils/i18n-format')
 
 const app = getApp()
+const t = (key, vars) => i18n.t(key, vars)
 
 const REPEAT_KEYS = ['none', 'daily', 'hourly', 'minutely', 'weekly', 'monthly', 'yearly', 'workday', 'restday', 'dates']
-const REPEAT_NAMES = ['仅一次', '按天', '按小时', '按分钟', '按周', '按月', '按年', '每工作日', '每休息日', '按日历选择']
+const REPEAT_NAMES = fmt.repeatNames()
 const ACTION_KEYS = ['skip', 'postpone']
-const ACTION_NAMES = ['跳过当日，本次不提醒', '顺延到下一个工作日']
+const ACTION_NAMES = fmt.actionNames()
 const PRIORITY_KEYS = ['high', 'medium', 'low']
-const PRIORITY_NAMES = ['高', '中', '低']
+const PRIORITY_NAMES = fmt.priorityNames()
 
 /** 需要填写间隔的重复方式 */
 const WITH_INTERVAL = ['daily', 'hourly', 'minutely', 'weekly', 'monthly', 'yearly']
 
 /** 间隔输入框的标签：每隔几(天/小时/分钟/周/个月/年) */
 function intervalLabelOf(type) {
-  const unit = core.INTERVAL_UNITS[type]
-  return unit ? '每隔几' + unit : '每隔几天'
+  return t('ed_interval_label', { unit: fmt.intervalUnit(type) })
 }
 
 /** 间隔上限：按天最大 999，其余（小时/分钟/周/月/年）仍是 99 */
@@ -48,14 +50,18 @@ function setCalendarNotice(text) {
 /* ── 自定义滚轮选择器数据源（替代原生 picker：原生滚轮字号系统固定不可调） ── */
 const CP_YEAR_START = 2000
 const CP_YEAR_END = 2035
-const CP_YEARS = []
-const CP_MONTHS = []
-const CP_HOURS = []
-const CP_MINUTES = []
-for (let y = CP_YEAR_START; y <= CP_YEAR_END; y++) CP_YEARS.push(y + '年')
-for (let m = 1; m <= 12; m++) CP_MONTHS.push(m + '月')
-for (let h = 0; h < 24; h++) CP_HOURS.push(core.pad2(h) + '时')
-for (let mi = 0; mi < 60; mi++) CP_MINUTES.push(core.pad2(mi) + '分')
+/** 滚轮列（年/月/日/时/分后缀）按当前语言重建，全部走字典 */
+function cpItems() {
+  const years = []
+  const months = []
+  const hours = []
+  const minutes = []
+  for (let y = CP_YEAR_START; y <= CP_YEAR_END; y++) years.push(t('ed_cp_year', { n: y }))
+  for (let m = 1; m <= 12; m++) months.push(t('ed_cp_month', { n: m }))
+  for (let h = 0; h < 24; h++) hours.push(t('ed_cp_hour', { n: core.pad2(h) }))
+  for (let mi = 0; mi < 60; mi++) minutes.push(t('ed_cp_minute', { n: core.pad2(mi) }))
+  return { years: years, months: months, hours: hours, minutes: minutes }
+}
 
 /** 走「年/月/日」三列滚轮的选择类型 */
 function isDateCp(type) {
@@ -63,7 +69,7 @@ function isDateCp(type) {
 }
 
 /* ── 「按日历选择」的月历多选面板 ─────────────────────────────────────── */
-const WEEK_HEAD = ['一', '二', '三', '四', '五', '六', '日']
+const WEEK_HEAD = fmt.weekHead()
 const CAL_PAGE = 6 // 每次加载几个月
 const CAL_MAX = 36 // 最多向前 3 年，避免无意义地堆 DOM
 
@@ -81,7 +87,7 @@ function ymAdd(ym, delta) {
 function cpDaysOfMonth(year, month) {
   const total = new Date(year, month, 0).getDate()
   const out = []
-  for (let d = 1; d <= total; d++) out.push(d + '日')
+  for (let d = 1; d <= total; d++) out.push(t('ed_cp_day', { n: d }))
   return out
 }
 
@@ -129,7 +135,7 @@ Page({
     repeatIndex: 0,
     showInterval: false,
     intervalText: '1',
-    intervalLabel: '每隔几天',
+    intervalLabel: '',
     intervalRange: '1-999',
     intervalMax: 999,
     // 重复的生效日期范围：rangeEnabled=false 表示不限；单端为空表示该端不限
@@ -156,7 +162,7 @@ Page({
     previewFirst: '',
     previewNext: '',
     previewTip: '',
-    saveText: '保存',
+    saveText: '',
     // 完成方式：默认 false = 提醒发完自动完成；用户勾了才必须手工点「确认做完了」
     manualDone: false,
     // 新建保存时自动写入手机系统日历（默认开）；编辑不自动写，避免重复日历事件
@@ -171,6 +177,62 @@ Page({
     cpTitle: '',
     cpColumns: [],
     cpValue: [],
+    cpYears: [],
+    cpMonths: [],
+    cpHours: [],
+    cpMinutes: [],
+    holidaySkipText: '',
+  },
+
+  /** 语言变化时统一重建：字典、派生文案、滚轮列、导航标题、地区节假日标签 */
+  applyLang() {
+    i18n.applyPage(this)
+    const cp = cpItems()
+    this.setData({
+      repeatNames: fmt.repeatNames(),
+      actionNames: fmt.actionNames(),
+      priorityNames: fmt.priorityNames(),
+      weekHead: fmt.weekHead(),
+      cpYears: cp.years,
+      cpMonths: cp.months,
+      cpHours: cp.hours,
+      cpMinutes: cp.minutes,
+      saveText: this.data.isEdit ? t('ed_save_edit') : t('save'),
+      intervalLabel: intervalLabelOf(REPEAT_KEYS[this.data.repeatIndex] || 'none'),
+      holidaySkipText: t('ed_holiday_skip', { name: i18n.regionName() }),
+    })
+    wx.setNavigationBarTitle({ title: this.data.isEdit ? t('edit_title_edit') : t('edit_title_new') })
+  },
+
+  /** 首次进入 / 语言变化时检测；app.setLang 只通知栈顶页面，onShow 兜底 */
+  onShow() {
+    const lang = i18n.current()
+    const changed = !!this._lastLang && this._lastLang !== lang
+    this._lastLang = lang
+    if (changed) {
+      this.onLangChanged(lang)
+    } else {
+      this.applyLang()
+    }
+  },
+
+  onLangChanged(code) {
+    this._lastLang = code || i18n.current()
+    this.applyLang()
+    this.ensureHolidayMap()
+    this.updateWeekday()
+    this.updatePreview()
+  },
+
+  /** 冷启动直达编辑页 / 切语言清缓存后，按当前地区重建 holidayMap；stub 能力不足时直接跳过 */
+  ensureHolidayMap() {
+    const map = app.globalData.holidayMap
+    if (map && Object.keys(map).length) return
+    if (typeof store.mergeActiveHolidays !== 'function' || typeof app.setHolidayMap !== 'function') return
+    const region = i18n.region()
+    const cached = store.readHolidayCache()
+    const rows = (region === 'cn' && cached && cached.rows) ? cached.rows : []
+    app.setHolidayMap(core.buildHolidayMap(store.mergeActiveHolidays(rows, region)))
   },
 
   onLoad(options) {
@@ -185,7 +247,7 @@ Page({
       repeatIndex: 0,
       showInterval: false,
       intervalText: '1',
-      intervalLabel: '每隔几天',
+      intervalLabel: '',
       priorityIndex: 1,
       skipHoliday: true,
       actionIndex: 0,
@@ -205,6 +267,8 @@ Page({
       calendarHint: '',
     }
     this.setData(patch)
+    this.applyLang()
+    this.ensureHolidayMap()
     this.updateWeekday()
     this.updatePreview()
 
@@ -213,11 +277,11 @@ Page({
     if (!(options && options.id)) this.saveToken = saveGuard.makeSaveToken()
 
     if (options && options.id) {
-      this.setData({ id: String(options.id), isEdit: true, saveText: '保存修改' })
-      wx.setNavigationBarTitle({ title: '编辑待办' })
+      this.setData({ id: String(options.id), isEdit: true, saveText: t('ed_save_edit') })
+      wx.setNavigationBarTitle({ title: t('edit_title_edit') })
       this.loadTodo(String(options.id))
     } else {
-      wx.setNavigationBarTitle({ title: '新建待办' })
+      wx.setNavigationBarTitle({ title: t('edit_title_new') })
     }
   },
 
@@ -228,9 +292,9 @@ Page({
   onShareAppMessage() {
     const inviteId = this.data.inviteId
     if (inviteId) {
-      const name = String(this.data.title || '').trim() || 'KIWI待办'
+      const name = String(this.data.title || '').trim() || t('app_name')
       return {
-        title: '邀请你一起提醒：' + name,
+        title: t('inv_share_invite', { name: name }),
         path: '/pages/invite/invite?invite=' + inviteId,
       }
     }
@@ -240,12 +304,12 @@ Page({
   async loadTodo(id) {
     const res = await store.listTodos()
     if (res.error) {
-      wx.showToast({ title: '加载失败', icon: 'none' })
+      wx.showToast({ title: t('ed_load_fail'), icon: 'none' })
       return
     }
     const todo = (res.data || []).filter((t) => t.id === id)[0]
     if (!todo) {
-      wx.showToast({ title: '待办不存在', icon: 'none' })
+      wx.showToast({ title: t('ed_todo_missing'), icon: 'none' })
       return
     }
     const first = new Date(todo.remind_at)
@@ -320,20 +384,20 @@ Page({
    */
   async goInvite() {
     if (!this.data.isEdit) {
-      wx.showToast({ title: '请先保存这条待办', icon: 'none' })
+      wx.showToast({ title: t('ed_save_first'), icon: 'none' })
       return
     }
     let inviteId = this.data.inviteId
     if (!inviteId) {
-      wx.showLoading({ title: '准备邀请', mask: true })
+      wx.showLoading({ title: t('ed_invite_preparing'), mask: true })
       await this.ensureInvite()
       wx.hideLoading()
       inviteId = this.data.inviteId
     }
     if (!inviteId) {
       wx.showModal({
-        title: '邀请未就绪',
-        content: '云函数 pushapi 可能还是旧版本。请在微信开发者工具里右键 cloudfunctions/pushapi →「上传并部署」，再重新打开本页。',
+        title: t('ed_invite_not_ready_title'),
+        content: t('ed_invite_not_ready_content'),
         showCancel: false,
       })
       return
@@ -347,16 +411,16 @@ Page({
     const inviteId = self.data.inviteId
     if (!inviteId) return
     wx.showModal({
-      title: '退出协作提醒',
-      content: '退出后这条待办会从你的列表移除，且不再收到提醒。',
+      title: t('ed_leave_title'),
+      content: t('ed_leave_content'),
       async success(r) {
         if (!r.confirm) return
         const { error } = await collab.leave(inviteId)
         if (error) {
-          wx.showToast({ title: error.message || '退出失败', icon: 'none' })
+          wx.showToast({ title: error.message || t('ed_leave_fail'), icon: 'none' })
           return
         }
-        wx.showToast({ title: '已退出', icon: 'success' })
+        wx.showToast({ title: t('mp_t_logout'), icon: 'success' })
         app.globalData.todosDirty = true
         setTimeout(() => {
           wx.navigateBack()
@@ -404,9 +468,9 @@ Page({
     let text = ''
     if (!isNaN(d.getTime())) {
       const kind = app.globalData.holidayMap[this.data.dateStr]
-      text = core.weekdayName(d)
-      if (kind === 'holiday') text += ' · 法定节假日'
-      else if (kind === 'workday') text += ' · 调休补班'
+      text = fmt.weekday(d)
+      if (kind === 'holiday') text += ' · ' + t('mp_mark_holiday')
+      else if (kind === 'workday') text += ' · ' + t('mp_mark_makeup')
     }
     this.setData({ weekdayText: text })
   },
@@ -419,7 +483,7 @@ Page({
     this.setData({
       previewFirst: isNaN(first.getTime())
         ? '—'
-        : core.minuteKey(first) + ' ' + core.weekdayName(first),
+        : core.minuteKey(first) + ' ' + fmt.weekday(first),
     })
 
     // 系统日历支持性是纯计算（不碰 wx API），在这里实时给提示：
@@ -428,24 +492,24 @@ Page({
     let calHint = ''
     if (!this.data.autoCalendar) {
       calHint = this.data.isEdit
-        ? '编辑保存不会重复写入日历；要重写一条请打开上方开关，或点下方按钮。'
-        : '已关闭自动写入；需要时点下方按钮手动写入手机日历。'
+        ? t('ed_cal_hint_edit_off')
+        : t('ed_cal_hint_new_off')
     } else if (!calInfo.ok) {
-      calHint = '当前设置无法写入系统日历，保存时会自动跳过：' + calInfo.reason
+      calHint = t('ed_cal_hint_unsupported') + calInfo.reason
     } else {
       calHint = this.data.isEdit
-        ? '保存时会重新写入一条日历事件；旧事件微信删不掉，需要到手机日历 App 手动删。'
-        : '保存时将自动写入手机系统日历，由系统本地提醒，不消耗微信额度。'
+        ? t('ed_cal_hint_edit_on')
+        : t('ed_cal_hint_new_on')
     }
     this.setData({ calendarSupported: calInfo.ok, calendarHint: calHint })
 
-    const range = core.describeRepeatRange(todo)
+    const range = fmt.describeRepeatRange(todo)
     let hint = range
-      ? '仅在 ' + range + ' 之间按规则提醒，范围外的日期不提醒（留空的一端表示不限）。'
-      : '不限制日期范围，按所选重复规则一直提醒下去。'
+      ? t('ed_range_on', { range: range })
+      : t('ed_range_off')
     // 提醒日期落在范围外时，「首次提醒」那一行显示的是一个不会响的时刻，要明确点出来
     if (range && !isNaN(first.getTime()) && !core.inRepeatRange(first, todo)) {
-      hint += ' 注意：当前提醒日期不在范围内，该日不会提醒。'
+      hint += t('ed_range_warn')
     }
     this.setData({ rangeHint: hint })
 
@@ -453,8 +517,8 @@ Page({
     if (todo.repeat_type === 'dates' && !(todo.repeat_dates || []).length) {
       this.setData({
         previewFirst: '—',
-        previewNext: '未选择日期',
-        previewTip: '「按日历选择」需要先在上面打开日历，挑出要提醒的那几天。',
+        previewNext: t('ed_no_dates'),
+        previewTip: t('ed_tip_dates_empty'),
       })
       return
     }
@@ -462,20 +526,20 @@ Page({
     const next = core.nextOccurrence(todo, Date.now(), holidayMap)
     if (!next && todo.repeat_type === 'dates') {
       this.setData({
-        previewNext: '无（指定日期已过完）',
-        previewTip: '你选的 ' + todo.repeat_dates.length + ' 天都已经过了，这条之后不会再提醒。',
+        previewNext: t('ed_next_dates_done'),
+        previewTip: t('ed_tip_dates_passed', { n: todo.repeat_dates.length }),
       })
       return
     }
     if (!next) {
       const why = todo.repeat_type === 'none'
-        ? '无（单次提醒已过）'
+        ? t('ed_next_once')
         : range
-        ? '无（已超出生效日期范围）'
-        : '无'
+        ? t('ed_next_range')
+        : t('ed_next_none')
       this.setData({
         previewNext: why,
-        previewTip: todo.repeat_type === 'none' ? '单次提醒到期后不再重复。' : '当前设置下没有后续的提醒时刻。',
+        previewTip: todo.repeat_type === 'none' ? t('ed_tip_once') : t('ed_tip_no_next'),
       })
       return
     }
@@ -483,35 +547,34 @@ Page({
 
     let tip = ''
     const key = core.dateKey(new Date(next.at))
-    if (range) tip = '生效范围 ' + range + '；'
+    if (range) tip = t('ed_tip_range', { range: range })
     if (todo.repeat_type === 'dates') {
       const list = core.selectedDates(todo)
       let offCount = 0
       list.forEach((d) => {
         if (holidayMap[d] === 'holiday') offCount++
       })
-      tip += '共 ' + list.length + ' 个指定日期：' + core.describeRepeatDates(todo, 6) + '，最后一天之后不再提醒。'
+      tip += t('ed_tip_dates_summary', { n: list.length, dates: fmt.describeRepeatDates(todo, 6) })
       if (offCount && todo.skip_holiday) {
-        tip +=
-          ' 其中 ' + offCount + ' 天是法定节假日，' +
-          (todo.holiday_action === 'postpone' ? '会顺延到下一个工作日再提醒。' : '会按「跳过节假日」不提醒。')
+        tip += t('ed_tip_dates_off', { n: offCount }) +
+          (todo.holiday_action === 'postpone' ? t('ed_tip_dates_postpone') : t('ed_tip_dates_skip'))
       }
       this.setData({ previewTip: tip })
       return
     }
     if (todo.repeat_type === 'restday') {
-      tip += '仅周末及法定节假日提醒（调休补班日不提醒）。'
+      tip += t('ed_tip_restday')
       this.setData({ previewTip: tip })
       return
     }
     if (holidayMap[key] === 'holiday') {
-      tip += '注意：该日被标为法定节假日，请到「我的 → 节假日维护」确认。'
+      tip += t('ed_tip_holiday_mark')
     } else if (todo.skip_holiday) {
       tip += todo.holiday_action === 'postpone'
-        ? '遇到法定节假日将顺延到下一个工作日再提醒。'
-        : '遇到法定节假日将跳过当日，本次不提醒。'
+        ? t('ed_tip_postpone')
+        : t('ed_tip_skip')
     } else {
-      tip += '不跳过节假日，照常提醒。'
+      tip += t('ed_tip_no_skip')
     }
     this.setData({ previewTip: tip })
   },
@@ -529,16 +592,16 @@ Page({
   /** 选图 → 直传云存储 → 只把 fileID 记进 todos */
   async onAddImage() {
     if (this.data.isShared) return
-    wx.showLoading({ title: '上传中…', mask: true })
+    wx.showLoading({ title: t('ed_uploading'), mask: true })
     try {
       const ids = await attachments.chooseAndUpload(this.data.images)
       this.setData({ images: ids })
-      wx.showToast({ title: '已添加', icon: 'success' })
+      wx.showToast({ title: t('hol_added'), icon: 'success' })
     } catch (e) {
       // 用户取消选图不算失败，静默返回
       const msg = String((e && e.errMsg) || (e && e.message) || '')
       if (msg.indexOf('cancel') >= 0) return
-      wx.showToast({ title: msg || '添加失败', icon: 'none' })
+      wx.showToast({ title: msg || t('hol_add_fail'), icon: 'none' })
     } finally {
       wx.hideLoading()
     }
@@ -574,8 +637,8 @@ Page({
       const msg = String((e && e.errMsg) || (e && e.message) || '')
       if (msg.indexOf('cancel') >= 0) return
       wx.showModal({
-        title: '无法选择位置',
-        content: '需要你授权位置权限，并在小程序后台开通「地理位置」接口。可到小程序右上角「··· → 设置」里开启后重试。',
+        title: t('ed_location_title'),
+        content: t('ed_location_content'),
         showCancel: false,
       })
     }
@@ -686,7 +749,7 @@ Page({
   openCp(e) {
     // 协作副本只读：不允许改日期/时间/重复等规则
     if (this.data.isShared) {
-      wx.showToast({ title: '协作待办由创建者统一管理', icon: 'none' })
+      wx.showToast({ title: t('ed_shared_readonly'), icon: 'none' })
       return
     }
     const type = String(e.currentTarget.dataset.type || '')
@@ -697,7 +760,7 @@ Page({
 
     if (isDateCp(type)) {
       title =
-        type === 'date' ? '选择日期' : type === 'rangeStart' ? '选择开始日期' : '选择结束日期'
+        type === 'date' ? t('ed_cp_date') : type === 'rangeStart' ? t('ed_cp_range_start') : t('ed_cp_range_end')
       const cur = type === 'date' ? d.dateStr : type === 'rangeStart' ? d.rangeStart : d.rangeEnd
       const parts = String(cur || d.dateStr).split('-')
       const y = Math.min(CP_YEAR_END, Math.max(CP_YEAR_START, Number(parts[0]) || CP_YEAR_START))
@@ -705,29 +768,29 @@ Page({
       const day = Math.max(1, Number(parts[2]) || 1)
       const days = cpDaysOfMonth(y, m)
       columns = [
-        { key: 'year', items: CP_YEARS },
-        { key: 'month', items: CP_MONTHS },
+        { key: 'year', items: d.cpYears },
+        { key: 'month', items: d.cpMonths },
         { key: 'day', items: days },
       ]
       value = [y - CP_YEAR_START, m - 1, Math.min(day, days.length) - 1]
     } else if (type === 'time') {
-      title = '选择时间'
+      title = t('ed_cp_time')
       const tp = String(d.timeStr).split(':')
       columns = [
-        { key: 'hour', items: CP_HOURS },
-        { key: 'minute', items: CP_MINUTES },
+        { key: 'hour', items: d.cpHours },
+        { key: 'minute', items: d.cpMinutes },
       ]
       value = [Number(tp[0]) || 0, Number(tp[1]) || 0]
     } else if (type === 'repeat') {
-      title = '重复方式'
+      title = t('f_repeat')
       columns = [{ key: 'value', items: d.repeatNames }]
       value = [d.repeatIndex]
     } else if (type === 'priority') {
-      title = '优先级'
+      title = t('f_prio')
       columns = [{ key: 'value', items: d.priorityNames }]
       value = [d.priorityIndex]
     } else if (type === 'action') {
-      title = '遇到节假日'
+      title = t('f_on_holiday')
       columns = [{ key: 'value', items: d.actionNames }]
       value = [d.actionIndex]
     } else {
@@ -821,10 +884,10 @@ Page({
           today: key === today,
           past: key < today,
           kind: kind,
-          mark: kind === 'holiday' ? '休' : kind === 'workday' ? '班' : '',
+          mark: kind === 'holiday' ? t('ed_cal_mark_off') : kind === 'workday' ? t('ed_cal_mark_work') : '',
         })
       }
-      out.push({ key: ym, title: y + '年' + m + '月', days: days })
+      out.push({ key: ym, title: t('ed_cal_month_title', { year: y, month: m }), days: days })
     }
     return out
   },
@@ -832,7 +895,7 @@ Page({
   /** 打开月历：从「提醒日期所在月」与「当月」中较晚的那个开始 */
   openCalendar() {
     if (this.data.isShared) {
-      wx.showToast({ title: '协作待办由创建者统一管理', icon: 'none' })
+      wx.showToast({ title: t('ed_shared_readonly'), icon: 'none' })
       return
     }
     const nowYm = core.dateKey(new Date()).slice(0, 7)
@@ -923,23 +986,23 @@ Page({
     if (!this.data.autoCalendar || this.data.isShared) return false
     const info = calendar.supportInfo(todo)
     if (!info.ok) {
-      console.warn('[edit] 自动写日历跳过：', info.reason)
-      setCalendarNotice('当前规则不支持写入日历，已跳过')
+      console.warn('[edit] calendar skipped:', info.reason)
+      setCalendarNotice(t('ed_cal_skip_notice'))
       return false
     }
     // 基础库过低时日历 API 根本不存在：必须在点击链里同步判掉，
     // 否则 writeTodoCalendar 会在异步回调里返回失败，这次点击的订阅额度就白丢了。
     const apiName = info.single ? 'addPhoneCalendar' : 'addPhoneRepeatCalendar'
     if (typeof wx[apiName] !== 'function') {
-      setCalendarNotice('当前微信版本过低，无法写入日历')
+      setCalendarNotice(t('ed_cal_low_version'))
       return false
     }
     // 同步发起：这一句必须在点击手势链里，不能移到任何 await 之后
     calendar.writeTodoCalendar(todo).then((res) => {
-      if (!res.ok) console.warn('[edit] 自动写日历失败：', res.message)
-      setCalendarNotice(res.ok ? '已写入手机日历' : '手机日历未写入，可在编辑页重试')
+      if (!res.ok) console.warn('[edit] calendar write failed:', res.message)
+      setCalendarNotice(res.ok ? t('ed_cal_ok_notice') : t('ed_cal_fail_notice'))
     }).catch(() => {
-      setCalendarNotice('手机日历未写入，可在编辑页重试')
+      setCalendarNotice(t('ed_cal_fail_notice'))
     })
     return true
   },
@@ -967,24 +1030,24 @@ Page({
     }
     // 协作副本只读：内容由创建者统一维护，避免双向改冲突
     if (this.data.isShared) {
-      bail('协作待办由创建者统一管理')
+      bail(t('ed_shared_readonly'))
       return
     }
     // 生效范围：结束日早于开始日是一条永远不会响的规则，直接拦住
     if (this.data.rangeEnabled && this.data.rangeStart && this.data.rangeEnd) {
       if (String(this.data.rangeEnd) < String(this.data.rangeStart)) {
-        bail('结束日期不能早于开始日期')
+        bail(t('ed_range_invalid'))
         return
       }
     }
     // 按日历选择：一天都没挑就是一条永远不会响的规则，拦住
     if (REPEAT_KEYS[this.data.repeatIndex] === 'dates' && !(this.data.repeatDates || []).length) {
-      bail('请选择提醒日期')
+      bail(t('ed_pick_dates_required'))
       return
     }
     const title = String(this.data.title || '').trim()
     if (!title) {
-      bail('请填写标题')
+      bail(t('ed_need_title'))
       return
     }
     const todo = this.currentTodo()
@@ -1030,13 +1093,13 @@ Page({
 
     // 上锁：按钮变「保存中…」+ 全屏遮罩 loading，写库期间连点也进不来
     this.setData({ saving: true })
-    wx.showLoading({ title: '保存中…', mask: true })
+    wx.showLoading({ title: t('saving'), mask: true })
     const fail = (msg) => {
       wx.hideLoading()
       this.setData({ saving: false })
       // 日历已经先写入了，而微信没有删除日历事件的接口，必须提醒用户去日历 App 手动删
       wx.showToast({
-        title: calendarStarted ? '保存失败；日历若已写入请手动删除' : msg,
+        title: calendarStarted ? t('ed_fail_calendar_written') : msg,
         icon: 'none',
         duration: 2600,
       })
@@ -1049,22 +1112,22 @@ Page({
       if (this.data.isEdit) {
         res = await saveGuard.withTimeout(store.updateTodo(this.data.id, todo))
         if (!res.error && (!res.data || res.data.length === 0)) {
-          fail('没有权限修改这条待办')
+          fail(t('ed_no_permission_edit'))
           return
         }
       } else {
         res = await saveGuard.withTimeout(store.insertTodo(todo))
         if (!res.error && (!res.data || res.data.length === 0)) {
-          fail('请先登录再创建待办')
+          fail(t('ed_need_login_create'))
           return
         }
       }
       if (res.error) {
-        fail(res.error.message || '保存失败，请重试')
+        fail(res.error.message || t('ed_save_fail_retry'))
         return
       }
     } catch (e) {
-      fail((e && e.message) || '保存失败，请重试')
+      fail((e && e.message) || t('ed_save_fail_retry'))
       return
     }
     if (!savedId && res.data && res.data[0]) savedId = res.data[0].id
@@ -1084,7 +1147,7 @@ Page({
     // 写库成功后才给「已保存」并返回；成功到返回这段也保持锁，避免 toast 期间再点。
     // 返回失败（页面栈异常）时把锁放开，让用户还能重试（重试走幂等，不会重复）。
     wx.hideLoading()
-    wx.showToast({ title: '已保存', icon: 'success' })
+    wx.showToast({ title: t('hol_saved'), icon: 'success' })
     setTimeout(() => {
       wx.navigateBack({
         fail: () => this.setData({ saving: false }),
@@ -1102,15 +1165,15 @@ Page({
     const todo = this.currentTodo()
     const info = calendar.supportInfo(todo)
     if (!info.ok) {
-      wx.showModal({ title: '这条待办不适合写入日历', content: info.reason, showCancel: false })
+      wx.showModal({ title: t('ed_write_cal_title'), content: info.reason, showCancel: false })
       return
     }
     calendar.writeTodoCalendar(todo).then((res) => {
       wx.showModal({
-        title: res.ok ? '已写入手机日历' : '写入失败',
+        title: res.ok ? t('ed_cal_ok_notice') : t('ed_write_cal_fail'),
         content: res.message,
         showCancel: false,
-        confirmText: res.ok ? '知道了' : '关闭',
+        confirmText: res.ok ? t('idx_got_it') : t('k_close'),
       })
     })
   },
@@ -1118,16 +1181,16 @@ Page({
   onDelete() {
     const self = this
     wx.showModal({
-      title: '删除待办',
-      content: '确定删除这条待办？历史提醒记录会保留。',
+      title: t('ed_delete_title'),
+      content: t('ed_delete_content'),
       async success(res) {
         if (!res.confirm) return
         const result = await store.removeTodo(self.data.id)
         if (result.error) {
-          wx.showToast({ title: '删除失败', icon: 'none' })
+          wx.showToast({ title: t('t_del_fail'), icon: 'none' })
           return
         }
-        wx.showToast({ title: '已删除', icon: 'success' })
+        wx.showToast({ title: t('t_deleted'), icon: 'success' })
         app.globalData.todosDirty = true
         setTimeout(() => {
           wx.navigateBack()
