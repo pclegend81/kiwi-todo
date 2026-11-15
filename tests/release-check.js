@@ -170,7 +170,7 @@ test('SW 排除 OAuth 回调页、缓存声音模块且不缓存 POST', () => {
   assert.ok(/oauth-callback\.html/.test(sw), '回调页可能被离线缓存（授权码泄露）')
   assert.ok(/req\.method !== 'GET'\) return/.test(sw), 'POST 未绕过缓存')
   assert.ok(/'\.\/sound\.js'/.test(sw), 'sound.js 未进预缓存')
-  assert.ok(/kiwi-web-v5/.test(sw), 'SW 版本不是 v5')
+  assert.ok(/kiwi-web-v6/.test(sw), 'SW 版本不是 v6')
 })
 
 console.log('\n【C】交付一致性')

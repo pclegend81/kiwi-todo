@@ -271,9 +271,9 @@ test('index.html 桥接 sound.js，并提供开关与试听入口', () => {
   assert.strictEqual((html.match(/delete window\.module/g) || []).length, 1)
 })
 
-test('Service Worker 升到 v5 并缓存 sound.js（老设备不会吃到旧资源）', () => {
+test('Service Worker 升到 v6 并缓存 sound.js（老设备不会吃到旧资源）', () => {
   const sw = read('webapp/sw.js')
-  assert.ok(sw.includes("'kiwi-web-v5'"))
+  assert.ok(sw.includes("'kiwi-web-v6'"))
   assert.ok(sw.includes("'./sound.js'"))
   assert.ok(sw.indexOf("'./sound.js'") < sw.indexOf("'./manifest.json'"))
 })

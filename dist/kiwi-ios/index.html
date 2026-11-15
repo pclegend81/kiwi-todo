@@ -529,6 +529,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
           <div class="field">
             <label>{{ $t('f_time') }}</label>
             <input type="datetime-local" v-model="form.remindLocal">
+            <div class="small muted" style="margin-top:6px" v-if="formWeekday">{{ formWeekday }}</div>
           </div>
           <div class="field">
             <label>{{ $t('f_repeat') }}</label>

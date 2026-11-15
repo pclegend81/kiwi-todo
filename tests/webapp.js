@@ -262,7 +262,7 @@ test('登录前端：回调页 / 已配置才渲染按钮 / 关联引导 / SW �
   const sw = read(path.join(WEB, 'sw.js'))
   assert.ok(sw.includes("url.pathname.indexOf('oauth-callback.html') >= 0"),
     '带 code/state 的回调页绝不能进离线缓存')
-  assert.ok(sw.includes("'kiwi-web-v5'"), 'SW 缓存版本未升级，老设备会吃到旧资源')
+  assert.ok(sw.includes("'kiwi-web-v6'"), 'SW 缓存版本未升级，老设备会吃到旧资源')
 })
 
 console.log('\n结果: ' + passed + ' 通过, ' + failed + ' 失败')

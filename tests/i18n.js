@@ -184,9 +184,9 @@ test('网页端模板与逻辑没有残留写死的可见中文', () => {
   assert.ok(!/showToast\('[\u4e00-\u9fff]/.test(js), 'app.js 仍有中文 toast 字面量')
 })
 
-test('Service Worker 缓存了全部新字典并升到 v4', () => {
+test('Service Worker 缓存了全部新字典并升到 v6', () => {
   const sw = read('webapp/sw.js')
-  assert.ok(sw.includes("'kiwi-web-v5'"))
+  assert.ok(sw.includes("'kiwi-web-v6'"))
   for (const f of ['i18n.js', 'i18n-extra.js', 'holidays-region.js']) {
     assert.ok(sw.includes("'./" + f + "'"), 'SW 未缓存 ' + f)
   }

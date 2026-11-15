@@ -205,6 +205,22 @@
           return !rs.length || rs.indexOf(rg) >= 0
         })
       },
+      /**
+       * 新建 / 编辑弹层共用：datetime-local 只给日期时间，这里补上本地化的周几。
+       * openNew() 与 openEdit() 都写 form.remindLocal，所以两种模式自动同步。
+       */
+      formWeekday: function () {
+        var v = this.form && this.form.remindLocal
+        if (!v) return ''
+        var d = new Date(v)
+        if (isNaN(d.getTime())) return ''
+        var week = ''
+        try { week = d.toLocaleDateString(LOCALES[this.lang] || this.lang, { weekday: 'short' }) }
+        catch (e) { week = '' }
+        return translate(this.lang, 'fmt_date_label', {
+          month: d.getMonth() + 1, day: d.getDate(), week: week,
+        })
+      },
       /** OAuth 回调页与 index.html 同目录，拼成绝对地址给云函数签进 state */
       oauthRedirect: function () {
         try { return new URL('oauth-callback.html', window.location.href).href } catch (e) { return '' }

@@ -197,6 +197,13 @@
   color: #007aff;
 }
 
+.cp-week {
+  padding: 4rpx 0 8rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: #6b7280;
+}
+
 .cp-view {
   height: 440rpx; /* 5 行 × 88rpx */
 }

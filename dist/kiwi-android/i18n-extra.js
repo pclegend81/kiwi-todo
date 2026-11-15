@@ -476,6 +476,17 @@ var SND_EXTRA = {
 }
 Object.keys(SND_EXTRA).forEach(function (k) { ROWS[k] = SND_EXTRA[k] })
 
+/* 日期选择时的周几：{n}/{date} 是数字/日期，{week} 由 Intl 按当前语言生成 */
+var WD_EXTRA = {
+  wd_cp_day: ['{n}日 {week}', '{n}日 {week}', '{n} ({week})', '{n} ({week})',
+    '{n}日 {week}', '{n}일 {week}', '{n}. ({week})', '{n} ({week})',
+    '{n} ({week})', '{n} ({week})', '{n} ({week})'],
+  wd_picker_full: ['{date} {week}', '{date} {week}', '{date} ({week})', '{date} ({week})',
+    '{date} {week}', '{date} {week}', '{date} ({week})', '{date} ({week})',
+    '{date} ({week})', '{date} ({week})', '{date} ({week})'],
+}
+Object.keys(WD_EXTRA).forEach(function (k) { ROWS[k] = WD_EXTRA[k] })
+
 var EXTRA = {}
 Object.keys(ROWS).forEach(function (k) {
   var o = {}

@@ -191,7 +191,8 @@ node tests/oauth.js      # 34 项：八平台适配器/state 签名/PKCE/账号�
 node tests/i18n.js          # 24 项：11 语言字典/语言→地区→节假日行为级校验/6 页文案覆盖/多副本 md5
 node tests/sound.js         # 17 项：到点铃声/Web Audio 音色/开关/低版本振动兜底/两端接入点
 node tests/release-check.js # 19 项：发布门禁（订阅消息链路/多端互通/交付一致性）+ 上架材料清单
-for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 19 个套件
+node tests/weekday.js      # 13 项：日期滚轮的周几（含同天数换月重建）/范围日期/Web 弹层
+for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 20 个套件
 ```
 
 `tests/webapp.js` 会用 Vue 自带编译器在 Node 里把 `index.html` 的模板真编译一遍，
@@ -311,7 +312,7 @@ https://<你的静态托管域名>/oauth-callback.html
 
 - **网页/PWA**：登录页、主界面顶部、桌面侧栏共 3 处语言选择器；选择存
   `localStorage.kiwi_web_lang`，首次访问按浏览器语言自动选；OAuth 回调页与
-  Service Worker 缓存版本（`kiwi-web-v4`）同步。
+  Service Worker 缓存版本（当前 `kiwi-web-v6`）同步。
 - **小程序**：「我的」页新增「语言 / Language」卡片（11 项 picker），选择存
   `wx.Storage.kiwi_lang`。**6 个页面（待办 / 提醒记录 / 节假日维护 / 我的 /
   编辑 / 邀请）+ 自定义 tabBar 的可见文案、toast、弹窗、提醒预览、滚轮选择器
@@ -320,7 +321,7 @@ https://<你的静态托管域名>/oauth-callback.html
   `weekdayName / priorityText / describeRepeat / describeRepeatRange /
   describeRepeatDates / INTERVAL_UNITS` 不能改（推送链路共用），由它按当前
   语言重新实现一份给页面展示用，本身不写死任何中文。
-- 字典文件 `i18n.js`（129 键）/ `i18n-extra.js`（**407 键**）/
+- 字典文件 `i18n.js`（129 键）/ `i18n-extra.js`（**418 键**）/
   `holidays-region.js` 在 `webapp/` 与 `utils/` 各有一份，
   全部 × 11 语言；`tests/i18n.js` 会校验 md5 一致、每键 11 值非空、
   占位符在 11 语言里完全一致，防止两端翻译口径漂移。
@@ -373,7 +374,7 @@ https://<你的静态托管域名>/oauth-callback.html
    `pusher` / `pushapi` 从头到尾都不用动。
 2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**（含新增的
    `i18n.js` / `i18n-extra.js` / `holidays-region.js`）重新上传到静态托管；
-   Service Worker 已升 v5（见 K 节），老设备刷新两次会拿到新资源。
+   Service Worker 已升 v6（见 K 节），老设备刷新两次会拿到新资源。
 3. 小程序重新编译上传（本轮新增/改动：`utils/i18n*.js`、
    `utils/holidays-region.js`、**`utils/i18n-format.js`**，以及 6 个页面的
    `.js`/`.wxml` 与 `custom-tab-bar/index.js`）。`webapi` / `pusher` / `pushapi`
@@ -383,7 +384,7 @@ https://<你的静态托管域名>/oauth-callback.html
    标记、提醒预览、批量确认与删除弹窗也应是日文；登录页若配了 LINE 凭证
    应出现 LINE 按钮，切回简体中文则显示微信网页登录按钮。
 5. 本地跑 `node tests/i18n.js`（**24 项**，含 `store.mergeActiveHolidays` 的
-   行为级换表校验）与全量 19 个套件，全绿才说明联动与文案覆盖没回退。
+   行为级换表校验）与全量 20 个套件，全绿才说明联动与文案覆盖没回退。
 
 ---
 
@@ -425,8 +426,8 @@ Web 端 `webapp/sound.js`、小程序端 `utils/sound.js` 是同一套音色；
 
 1. **云函数零改动**：`webapi` / `pusher` / `pushapi` 都不用重新部署。
 2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**重新上传
-   静态托管，尤其新增的 `sound.js` 与升到 **v5** 的 `sw.js`（老设备刷新两次
-   拿到新缓存）。字典 `i18n-extra.js` 也更新了（407 → 416 键）。
+   静态托管，尤其新增的 `sound.js` 与升到 **v6** 的 `sw.js`（老设备刷新两次
+   拿到新缓存）。字典 `i18n-extra.js` 也更新了（407 → 418 键）。
 3. 小程序重新编译上传：新增 `utils/sound.js`，改动 `pages/index/index.js`、
    `pages/mine/mine.js` / `.wxml`、`utils/i18n-extra.js`。
 4. 验收：
@@ -435,7 +436,7 @@ Web 端 `webapp/sound.js`、小程序端 `utils/sound.js` 是同一套音色；
    - 小程序：「我的」→「铃声提醒」→「试听」应听到提示音（低版本为振动）；
      让一条提醒到点后重新打开小程序，首页应补响一声。
    - 本地跑 `node tests/sound.js`（**17 项**，mock AudioContext / wx 验证音色、
-     开关、异常与回退）与全量 **18 个套件**。
+     开关、异常与回退）与全量 **20 个套件**。
 
 ### K-4 限制
 
@@ -510,4 +511,61 @@ Widget / Siri 快捷指令、分享扩展里任选 2~3 项并做成主流程的�
    并更新 BUILD；**只上传 `index.js` 不够**，`pusher/config.json` 触发器要单独上传。
 2. 8 个 OAuth 平台真凭证（尤其 LINE / Kakao / Naver），未配会自动隐藏按钮。
 3. `web_bindings` / `users` / `identities` 三个集合权限设为「仅管理端可读写」。
-4. 跑 `node tests/release-check.js` + 全量 19 个套件，再按 J-4、K-3 做真机验收。
+4. 跑 `node tests/release-check.js` + 全量 20 个套件，再按 J-4、K-3 做真机验收。
+
+
+---
+
+## M. 日期选择显示周几（2026-11-15 新增）
+
+### M-1 需求与落点
+
+「新增和修改都要能在选日期时看到周几」。两端的新建 / 修改本来就是同一套表单
+（小程序 `pages/edit` 按 `isEdit` 分支，Web 弹层按 `editing.id` 分支），因此
+一处改动同时覆盖两种模式：
+
+| 位置 | 改造前 | 改造后 |
+|---|---|---|
+| 小程序日期滚轮「日」列 | `1日 / 2日 / …` | `1日 周一 / 2日 周二 / …` |
+| 小程序滚轮顶部 | 只有「选择日期」标题 | 实时显示 `2027-02-11 周四`，滚动即刷新 |
+| 小程序生效范围起止 | 只显示 `2027-03-01` | 显示 `2027-03-01 周一`（值仍只存纯日期） |
+| 小程序主日期字段 | 已有 `{{dateStr}} {{weekdayText}}` | 保持不变（含节假日「休/班」标记） |
+| Web/PWA 新建 / 编辑弹层 | 只有 `datetime-local` | 下方补一行按当前语言格式化的「2/11 Thu」 |
+
+「按日历选择」的月历本来就有本地化周表头（`fmt.weekHead()`），无需改动。
+
+### M-2 一个必须记住的坑
+
+周几由**年 + 月 + 日**共同决定。原 `onCpChange()` 只在「日列长度变化」时重建
+列（为处理 2 月大小月），加了周几后这个判断就不够：**7 月和 8 月都是 31 天，
+切换时会显示 7 月的星期**。现在改为按 `cpYm`（当前列对应的 `YYYY-MM`）判断，
+只要年/月变化就整列重建；同时 `cpWeekdayText` 每次滚动都重算。
+`applyLang()` 也会在切语言时按新语言重建正在打开的滚轮列。
+
+另外：`rangeStart` / `rangeEnd` / `cpValue` 里**仍然只存纯日期和索引**，
+周几只放进 `rangeStartText` / `rangeEndText` / `cpColumns` 等展示字段，
+所以 `remind_at`、`repeat_start`、`repeat_end` 的数据格式和云端推送完全没变。
+
+### M-3 本地化与回归
+
+新增 2 个共享词条（`wd_cp_day`、`wd_picker_full`）× 11 语言，占位符分别是
+`{n}/{week}`、`{date}/{week}`；`{week}` 由 `Intl.DateTimeFormat` 按当前语言
+生成，不新增任何硬编码星期表。`webapp/i18n-extra.js` 与
+`utils/i18n-extra.js` 保持 md5 一致（416 → **418 键**）。
+
+`tests/weekday.js` **13 项**是行为级测试：用 stub 真跑编辑页的
+`openCp` / `onCpChange` / `onCpConfirm`，覆盖 2 月 28 天、同天数换月、
+日列内滚动、索引夹取、范围起止与 Web 弹层。全量 **20 个套件**通过。
+
+### M-4 部署
+
+- **云函数零改动**：`webapi` / `pusher` / `pushapi` 都不用重新部署。
+- `webapp/` 全部文件重新上传静态托管（改了 `app.js`、`index.html`、`i18n-extra.js`；
+  **SW 升到 v6**：虽然无新增资源文件，但 `app.js` / `index.html` / 字典内容变了，
+  `sw.js` 字节不变时浏览器不会重新 install，老设备会一直吃旧缓存，故必须升版本）。
+- 小程序重新编译上传：`pages/edit/edit.js` / `.wxml` / `.wxss`、
+  `utils/i18n-extra.js`。
+- 验收：新建一条待办 → 点日期，滚轮每一天后面带周几、顶部显示选中日期周几；
+  从 7 月滚到 8 月，周几要跟着变；确定后日期值仍是 `YYYY-MM-DD`；
+  打开同一条待办修改，表现一致；生效范围起止也带周几；Web 弹层新建/
+  编辑都在日期输入下显示周几，切语言后周几跟着换语言。

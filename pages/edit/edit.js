@@ -83,12 +83,20 @@ function ymAdd(ym, delta) {
   return y + '-' + core.pad2(m)
 }
 
-/** 某年某月的「日」列（按实际天数生成，处理 2 月大小月） */
+/** 某年某月的「日」列：日期后面带周几（按实际天数生成，处理 2 月大小月） */
 function cpDaysOfMonth(year, month) {
   const total = new Date(year, month, 0).getDate()
   const out = []
-  for (let d = 1; d <= total; d++) out.push(t('ed_cp_day', { n: d }))
+  for (let d = 1; d <= total; d++) {
+    out.push(t('wd_cp_day', { n: d, week: fmt.weekday(new Date(year, month - 1, d)) }))
+  }
   return out
+}
+
+/** 滚轮顶部：当前选中的完整日期 + 周几，滚动时实时刷新 */
+function cpSelectedText(year, month, day) {
+  const date = year + '-' + core.pad2(month) + '-' + core.pad2(day)
+  return t('wd_picker_full', { date: date, week: fmt.weekday(new Date(year, month - 1, day)) })
 }
 
 function defaultDateTime() {
@@ -143,6 +151,9 @@ Page({
     rangeEnabled: false,
     rangeStart: '',
     rangeEnd: '',
+    // 展示用：生效范围两端也带周几，rangeStart/rangeEnd 仍只存 'YYYY-MM-DD'
+    rangeStartText: '',
+    rangeEndText: '',
     rangeHint: '',
     // 「按日历选择」：repeatDates 是升序的 'YYYY-MM-DD' 清单
     showDates: false,
@@ -177,6 +188,9 @@ Page({
     cpTitle: '',
     cpColumns: [],
     cpValue: [],
+    // cpYm 标记「日」列当前对应的年月；周几依赖年月，换月必须整列重建
+    cpYm: '',
+    cpWeekdayText: '',
     cpYears: [],
     cpMonths: [],
     cpHours: [],
@@ -188,7 +202,7 @@ Page({
   applyLang() {
     i18n.applyPage(this)
     const cp = cpItems()
-    this.setData({
+    const patch = {
       repeatNames: fmt.repeatNames(),
       actionNames: fmt.actionNames(),
       priorityNames: fmt.priorityNames(),
@@ -200,8 +214,37 @@ Page({
       saveText: this.data.isEdit ? t('ed_save_edit') : t('save'),
       intervalLabel: intervalLabelOf(REPEAT_KEYS[this.data.repeatIndex] || 'none'),
       holidaySkipText: t('ed_holiday_skip', { name: i18n.regionName() }),
-    })
+    }
+    // 滚轮正打开时切语言：日列里的周几也要按新语言重建
+    if (isDateCp(this.data.cpType) && this.data.cpYm) {
+      const ym = String(this.data.cpYm).split('-')
+      const y = Number(ym[0]) || CP_YEAR_START
+      const m = Number(ym[1]) || 1
+      const days = cpDaysOfMonth(y, m)
+      const columns = (this.data.cpColumns || []).slice()
+      columns[2] = { key: 'day', items: days }
+      patch.cpColumns = columns
+      const day = Math.min((Number((this.data.cpValue || [])[2]) || 0) + 1, days.length)
+      patch.cpWeekdayText = cpSelectedText(y, m, day)
+    }
+    this.setData(patch)
+    this.syncRangeTexts()
     wx.setNavigationBarTitle({ title: this.data.isEdit ? t('edit_title_edit') : t('edit_title_new') })
+  },
+
+  /** 生效范围起止日期的展示值带周几；新建与编辑共用，值仍只存纯日期 */
+  syncRangeTexts() {
+    const withWeek = (s) => {
+      if (!s) return ''
+      const p = String(s).split('-')
+      const d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]))
+      if (isNaN(d.getTime())) return s
+      return t('wd_picker_full', { date: s, week: fmt.weekday(d) })
+    }
+    this.setData({
+      rangeStartText: withWeek(this.data.rangeStart),
+      rangeEndText: withWeek(this.data.rangeEnd),
+    })
   },
 
   /** 首次进入 / 语言变化时检测；app.setLang 只通知栈顶页面，onShow 兜底 */
@@ -344,6 +387,7 @@ Page({
       // 老数据没有这个字段，按默认「自动完成」处理
       manualDone: todo.manual_done === true,
     })
+    this.syncRangeTexts()
     this.updateWeekday()
     this.updatePreview()
 
@@ -700,16 +744,19 @@ Page({
     } else {
       this.setData({ rangeEnabled: on })
     }
+    this.syncRangeTexts()
     this.updatePreview()
   },
 
   onRangeStart(e) {
     this.setData({ rangeStart: e.detail.value })
+    this.syncRangeTexts()
     this.updatePreview()
   },
 
   onRangeEnd(e) {
     this.setData({ rangeEnd: e.detail.value })
+    this.syncRangeTexts()
     this.updatePreview()
   },
 
@@ -757,6 +804,8 @@ Page({
     let title = ''
     let columns = []
     let value = []
+    let cpYm = ''
+    let cpWeekdayText = ''
 
     if (isDateCp(type)) {
       title =
@@ -767,12 +816,15 @@ Page({
       const m = Math.min(12, Math.max(1, Number(parts[1]) || 1))
       const day = Math.max(1, Number(parts[2]) || 1)
       const days = cpDaysOfMonth(y, m)
+      const dayIdx = Math.min(day, days.length) - 1
       columns = [
         { key: 'year', items: d.cpYears },
         { key: 'month', items: d.cpMonths },
         { key: 'day', items: days },
       ]
-      value = [y - CP_YEAR_START, m - 1, Math.min(day, days.length) - 1]
+      value = [y - CP_YEAR_START, m - 1, dayIdx]
+      cpYm = y + '-' + core.pad2(m)
+      cpWeekdayText = cpSelectedText(y, m, dayIdx + 1)
     } else if (type === 'time') {
       title = t('ed_cp_time')
       const tp = String(d.timeStr).split(':')
@@ -797,24 +849,36 @@ Page({
       return
     }
 
-    this.setData({ cpVisible: true, cpType: type, cpTitle: title, cpColumns: columns, cpValue: value })
+    this.setData({
+      cpVisible: true, cpType: type, cpTitle: title, cpColumns: columns, cpValue: value,
+      cpYm: cpYm, cpWeekdayText: cpWeekdayText,
+    })
   },
 
-  /** 滚动中：日期模式在年/月变化时重建「日」列（2 月等大小月），其余直接记录 */
+  /** 滚动中：日期模式按「年+月」重建「日」列，并实时刷新选中日期的周几 */
   onCpChange(e) {
     const val = e.detail.value || []
     if (isDateCp(this.data.cpType)) {
       const y = CP_YEAR_START + (Number(val[0]) || 0)
       const m = (Number(val[1]) || 0) + 1
+      const ym = y + '-' + core.pad2(m)
       const days = cpDaysOfMonth(y, m)
-      const current = this.data.cpColumns[2] ? this.data.cpColumns[2].items : []
-      if (current.length !== days.length) {
-        const dayIdx = Math.min(Number(val[2]) || 0, days.length - 1)
+      const dayIdx = Math.min(Number(val[2]) || 0, days.length - 1)
+      const patch = {
+        cpValue: [val[0], val[1], dayIdx],
+        cpYm: ym,
+        cpWeekdayText: cpSelectedText(y, m, dayIdx + 1),
+      }
+      // 周几由年+月+日共同决定：两个月天数相同（如 7 月 / 8 月都是 31 天）
+      // 时也不能沿用旧列，否则显示的还是上个月的星期。
+      const old = this.data.cpColumns[2] ? this.data.cpColumns[2].items : []
+      if (ym !== this.data.cpYm || old.length !== days.length) {
         const columns = this.data.cpColumns.slice()
         columns[2] = { key: 'day', items: days }
-        this.setData({ cpColumns: columns, cpValue: [val[0], val[1], dayIdx] })
-        return
+        patch.cpColumns = columns
       }
+      this.setData(patch)
+      return
     }
     this.setData({ cpValue: val })
   },

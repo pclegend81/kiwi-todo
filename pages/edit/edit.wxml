@@ -151,11 +151,11 @@
     </view>
     <view wx:if="{{rangeEnabled}}" class="field">
       <text class="field-label">{{T.ed_range_start}}</text>
-      <view class="picker-value" bindtap="openCp" data-type="rangeStart">{{rangeStart || T.ed_unlimited}}</view>
+      <view class="picker-value" bindtap="openCp" data-type="rangeStart">{{rangeStartText || T.ed_unlimited}}</view>
     </view>
     <view wx:if="{{rangeEnabled}}" class="field" style="border-bottom:none">
       <text class="field-label">{{T.ed_range_end}}</text>
-      <view class="picker-value" bindtap="openCp" data-type="rangeEnd">{{rangeEnd || T.ed_unlimited}}</view>
+      <view class="picker-value" bindtap="openCp" data-type="rangeEnd">{{rangeEndText || T.ed_unlimited}}</view>
     </view>
     <view wx:if="{{rangeEnabled}}" class="small muted" style="margin-top:16rpx">{{rangeHint}}</view>
   </view>
@@ -249,6 +249,7 @@
         <text class="cp-title">{{cpTitle}}</text>
         <text class="cp-confirm" bindtap="onCpConfirm">{{T.ed_confirm}}</text>
       </view>
+      <view class="cp-week" wx:if="{{cpWeekdayText}}">{{cpWeekdayText}}</view>
       <picker-view
         class="cp-view"
         indicator-style="height: 88rpx; border-top: 1rpx solid rgba(16,24,40,0.08); border-bottom: 1rpx solid rgba(16,24,40,0.08);"
