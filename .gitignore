@@ -3,3 +3,5 @@ server/config.json
 server/data.json
 project.private.config.json
 node_modules/
+__pycache__/
+*.pyc

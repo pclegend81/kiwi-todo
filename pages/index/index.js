@@ -5,6 +5,7 @@ const subscribe = require('../../utils/subscribe')
 const navGuard = require('../../utils/nav-guard')
 const { onShareAppMessage, onShareTimeline } = require('../../utils/share')
 const i18n = require('../../utils/i18n')
+const sound = require('../../utils/sound')
 
 const t = (key, vars) => i18n.t(key, vars)
 
@@ -300,6 +301,15 @@ Page({
       reasonText: row.status === 'skipped' ? (row.remark || t('mp_idx_holiday_skip')) : (row.remark || t('mp_idx_remind_due')),
     }))
     this.setData(Object.assign({ freshList: fresh, freshCount: fresh.length }, this.langCountTexts()))
+
+    // 打开小程序时若有刚到点的提醒，前台补一声系统默认提示音（后台仍靠微信订阅消息）；
+    // 同一批只响一次，节假日跳过的记录不响。
+    const due = fresh.filter((r) => r.status !== 'skipped')
+    const ringKey = due.map((r) => r.key).join('|')
+    if (due.length && ringKey !== this._lastRingKey) {
+      this._lastRingKey = ringKey
+      sound.play()
+    }
 
     // 同步写回了 last_logged_at / next_remind_at，直接合进内存，省掉一次全量拉取
     const patchMap = {}

@@ -3,7 +3,7 @@
  * 策略：静态资源「网络优先 + 离线回退缓存」，保证改版能及时生效，断网也能打开界面；
  *       API 请求（POST 到云函数 HTTP 访问服务）一律直连网络，绝不缓存。
  */
-var CACHE = 'kiwi-web-v4'
+var CACHE = 'kiwi-web-v5'
 var ASSETS = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ var ASSETS = [
   './holidays-region.js',
   './i18n.js',
   './i18n-extra.js',
+  './sound.js',
   './manifest.json',
   './icon-192.png',
   './icon-512.png',

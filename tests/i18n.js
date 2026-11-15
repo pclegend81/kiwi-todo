@@ -186,7 +186,7 @@ test('网页端模板与逻辑没有残留写死的可见中文', () => {
 
 test('Service Worker 缓存了全部新字典并升到 v4', () => {
   const sw = read('webapp/sw.js')
-  assert.ok(sw.includes("'kiwi-web-v4'"))
+  assert.ok(sw.includes("'kiwi-web-v5'"))
   for (const f of ['i18n.js', 'i18n-extra.js', 'holidays-region.js']) {
     assert.ok(sw.includes("'./" + f + "'"), 'SW 未缓存 ' + f)
   }

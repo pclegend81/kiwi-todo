@@ -4,6 +4,7 @@ const push = require('../../utils/push')
 const i18n = require('../../utils/i18n')
 const { callFunction } = require('../../utils/cloud')
 const { onShareAppMessage } = require('../../utils/share')
+const sound = require('../../utils/sound')
 
 const app = getApp()
 
@@ -27,6 +28,7 @@ Page({
     syncCode: '',
     syncExpireText: '',
     syncLoading: false,
+    soundOn: true,
   },
 
   onShow() {
@@ -52,6 +54,7 @@ Page({
       langIndex: idx,
       holidayHint: years.length ? t('mp_holiday_hint', { years: years.join('、') }) : '',
       holidayFromText: t('holiday_from', { name: i18n.regionName(lang) }),
+      soundOn: sound.enabled(),
     })
   },
 
@@ -72,6 +75,20 @@ Page({
     const item = i18n.LANGS[idx]
     if (!item) return
     if (app.setLang(item.code)) this.onLangChanged()
+  },
+
+  /** 铃声提醒开关：bindtap 会冒泡到根节点 onAnyTap，顺带补一次订阅额度 */
+  onSoundToggle() {
+    const on = !sound.enabled()
+    sound.setEnabled(on)
+    this.setData({ soundOn: on })
+    if (on) sound.play()
+    wx.showToast({ title: t(on ? 'snd_on' : 'snd_off'), icon: 'none' })
+  },
+
+  onSoundTest() {
+    sound.play()
+    wx.showToast({ title: t('snd_test_ok'), icon: 'none', duration: 1600 })
   },
 
   async refreshSession() {

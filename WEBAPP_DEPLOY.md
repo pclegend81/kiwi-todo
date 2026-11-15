@@ -189,7 +189,8 @@ node tests/webapi.js     # 24 项：口令/token/CRUD/白名单/游标/幂等/�
 node tests/webapp.js     # 18 项：模板编译/资源齐全/共享模块 md5/PWA 清单/登录链路
 node tests/oauth.js      # 34 项：八平台适配器/state 签名/PKCE/账号合并/未关联拦截
 node tests/i18n.js       # 24 项：11 语言字典/语言→地区→节假日行为级校验/6 页文案覆盖/多副本 md5
-for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 17 个套件
+node tests/sound.js      # 17 项：到点铃声/Web Audio 音色/开关/低版本振动兜底/两端接入点
+for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 18 个套件
 ```
 
 `tests/webapp.js` 会用 Vue 自带编译器在 Node 里把 `index.html` 的模板真编译一遍，
@@ -371,7 +372,7 @@ https://<你的静态托管域名>/oauth-callback.html
    `pusher` / `pushapi` 从头到尾都不用动。
 2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**（含新增的
    `i18n.js` / `i18n-extra.js` / `holidays-region.js`）重新上传到静态托管；
-   Service Worker 已升 v4，老设备刷新两次会拿到新资源。
+   Service Worker 已升 v5（见 K 节），老设备刷新两次会拿到新资源。
 3. 小程序重新编译上传（本轮新增/改动：`utils/i18n*.js`、
    `utils/holidays-region.js`、**`utils/i18n-format.js`**，以及 6 个页面的
    `.js`/`.wxml` 与 `custom-tab-bar/index.js`）。`webapi` / `pusher` / `pushapi`
@@ -381,4 +382,63 @@ https://<你的静态托管域名>/oauth-callback.html
    标记、提醒预览、批量确认与删除弹窗也应是日文；登录页若配了 LINE 凭证
    应出现 LINE 按钮，切回简体中文则显示微信网页登录按钮。
 5. 本地跑 `node tests/i18n.js`（**24 项**，含 `store.mergeActiveHolidays` 的
-   行为级换表校验）与全量 17 个套件，全绿才说明联动与文案覆盖没回退。
+   行为级换表校验）与全量 18 个套件，全绿才说明联动与文案覆盖没回退。
+
+---
+
+## K. 到点铃声提醒（2026-11-15 新增）
+
+### K-1 「系统默认铃声」在 Web / 小程序里的真实含义
+
+浏览器和微信小程序都运行在沙箱里，**读不到手机 / 电脑操作系统的铃声文件**，
+也没有「播放系统默认铃声」这种 API。所以本次按两层实现，全程不加载任何
+自定义铃声文件（不需要准备 mp3，也不增加安装包体积）：
+
+1. **系统通知音**：Web 的 `Notification`、小程序的微信订阅消息，提示音由
+   操作系统按用户当前铃声 / 静音设置播放 —— 这就是系统默认铃声；
+2. **内置默认提示音**：页面在前台时，用 Web Audio 合成一段 880Hz → 1174Hz
+   的双音（约 0.45 秒，带淡入淡出包络）。很多浏览器 / 系统的通知本身是
+   静音的，这一层保证到点时确实能听见。
+
+Web 端 `webapp/sound.js`、小程序端 `utils/sound.js` 是同一套音色；
+`reminder-core` 5 份副本与 `pusher` / `pushapi` **零改动**。
+
+### K-2 触发点与开关
+
+| 端 | 到点触发 | 开关 / 试听 |
+|---|---|---|
+| Web/PWA | `app.js checkDue()` 每 30 秒检查，提醒时刻落在过去 1 分钟内即响一次（同一会话去重） | 主界面顶部「♪ 铃声提醒」点击切换，桌面侧栏有 checkbox +「试听」 |
+| 小程序 | `pages/index` 打开时若有刚补记的到点提醒（`freshList`）则响一声；节假日跳过的记录不响，同一批只响一次 | 「我的」→「铃声提醒」卡片：开启 / 关闭 + 试听 |
+
+- Web 开关存 `localStorage.kiwi_web_sound`，小程序存 `wx.Storage.kiwi_sound`，
+  **默认开启**；关掉后到点只剩系统通知音，不再合成提示音。
+- 顺手修掉一个旧缺陷：原 `checkDue()` 在 `Notification.permission !== 'granted'`
+  时**整体跳过**到点检测，等于没给通知权限就什么提示都没有。现在铃声与
+  通知权限解耦，权限只决定要不要弹横幅。
+- 浏览器规定 `AudioContext` 必须在用户手势链里创建 / 恢复，所以首次点击页面
+  时会调用 `SOUND.unlock()`；进页面后什么都不点就干等提醒，可能被浏览器拦掉。
+- 基础库低于 2.19.0 的小程序没有 `wx.createWebAudioContext()`，会自动回退
+  `wx.vibrateShort()` 系统振动，不会静默失败。
+
+### K-3 部署与验收
+
+1. **云函数零改动**：`webapi` / `pusher` / `pushapi` 都不用重新部署。
+2. 重新运行 `python tools/build_dist.py`，把 `webapp/` 下**全部文件**重新上传
+   静态托管，尤其新增的 `sound.js` 与升到 **v5** 的 `sw.js`（老设备刷新两次
+   拿到新缓存）。字典 `i18n-extra.js` 也更新了（407 → 416 键）。
+3. 小程序重新编译上传：新增 `utils/sound.js`，改动 `pages/index/index.js`、
+   `pages/mine/mine.js` / `.wxml`、`utils/i18n-extra.js`。
+4. 验收：
+   - Web：绑定后点主界面顶部「♪」或侧栏「试听」→ 应听到两声短提示音；
+     关掉后再点「试听」不发声；新建一条 1 分钟后提醒的待办，到点响一声。
+   - 小程序：「我的」→「铃声提醒」→「试听」应听到提示音（低版本为振动）；
+     让一条提醒到点后重新打开小程序，首页应补响一声。
+   - 本地跑 `node tests/sound.js`（**17 项**，mock AudioContext / wx 验证音色、
+     开关、异常与回退）与全量 **18 个套件**。
+
+### K-4 限制
+
+- 网页关闭 / 小程序退到后台后**不会响铃**：后台提醒仍只有微信订阅消息，
+  其提示音由系统与微信设置决定（勿扰模式、静音键、通知权限都会影响）。
+- iOS 的静音拨键会同时压掉 Web Audio 合成音；Android 媒体音量过低也听不到。
+- 铃声提醒是端上补充，**不改变云端 `pusher` 的下发时机与节假日口径**。

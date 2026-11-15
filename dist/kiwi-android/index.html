@@ -391,6 +391,7 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
         <select class="lang-select" :value="lang" @change="setLang($event.target.value)">
           <option v-for="l in langList" :key="l.code" :value="l.code">{{ l.label }}</option>
         </select>
+        <span class="link small" @click="toggleSound" :title="$t('snd_hint')">♪ {{ $t('snd_title') }} {{ soundOn ? $t('snd_on') : $t('snd_off') }}</span>
         <button class="btn only-desktop" @click="openNew">{{ $t('new_todo') }} <kbd>N</kbd></button>
         <span class="link small" @click="unbind">{{ $t('logout') }}</span>
       </div>
@@ -446,6 +447,16 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
           </div>
           <div class="small muted" style="margin-top:8px">{{ $t('holiday_from', { name: regionName }) }}</div>
           <div class="small muted" style="margin-top:4px">{{ $t('lang_hint') }}</div>
+        </div>
+        <div class="side-panel">
+          <div class="sp-label">{{ $t('snd_title') }}</div>
+          <div class="sp-value" style="font-size:14px">
+            <label style="cursor:pointer">
+              <input type="checkbox" :checked="soundOn" @change="toggleSound"> {{ soundOn ? $t('snd_on') : $t('snd_off') }}
+            </label>
+            <span class="link small" style="margin-left:12px" @click="testSound">{{ $t('snd_test') }}</span>
+          </div>
+          <div class="small muted" style="margin-top:8px">{{ $t('snd_hint') }}</div>
         </div>
         <div class="side-note">
           {{ $t('k_hint') }}<br><br>
@@ -610,6 +621,11 @@ label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px
 <script src="i18n-extra.js"></script>
 <script>
   window.KIWI_I18N_EXTRA = module.exports.EXTRA;
+  module = { exports: {} }; exports = module.exports;
+</script>
+<script src="sound.js"></script>
+<script>
+  window.KIWI_SOUND = module.exports;
   delete window.module; delete window.exports;
 </script>
 <script src="app.js"></script>

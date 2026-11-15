@@ -462,6 +462,20 @@ var IDX2_EXTRA = {
 }
 Object.keys(IDX2_EXTRA).forEach(function (k) { ROWS[k] = IDX2_EXTRA[k] })
 
+// 到点铃声提醒：使用系统通知音 + 内置默认提示音，不加载自定义铃声
+var SND_EXTRA = {
+  snd_title: ['铃声提醒', '鈴聲提醒', 'Sound alerts', 'Sound alerts', 'サウンド通知', '소리 알림', 'Tonhinweise', 'Alertes sonores', 'Alertas de sonido', 'Avvisi sonori', 'Alertas sonoras'],
+  snd_on: ['已开启', '已開啟', 'On', 'On', 'オン', '켜짐', 'An', 'Activé', 'Activado', 'Attivato', 'Ativado'],
+  snd_off: ['已关闭', '已關閉', 'Off', 'Off', 'オフ', '꺼짐', 'Aus', 'Désactivé', 'Desactivado', 'Disattivato', 'Desativado'],
+  snd_turn_on: ['开启', '開啟', 'Turn on', 'Turn on', 'オンにする', '켜기', 'Einschalten', 'Activer', 'Activar', 'Attiva', 'Ativar'],
+  snd_turn_off: ['关闭', '關閉', 'Turn off', 'Turn off', 'オフにする', '끄기', 'Ausschalten', 'Désactiver', 'Desactivar', 'Disattiva', 'Desativar'],
+  snd_test: ['试听', '試聽', 'Test sound', 'Test sound', '試聴', '소리 테스트', 'Ton testen', 'Tester le son', 'Probar sonido', 'Prova suono', 'Testar som'],
+  snd_hint: ['到点时使用系统默认提示音，不加载自定义铃声；后台提醒仍由微信订阅消息下发。', '到點時使用系統預設提示音，不載入自訂鈴聲；背景提醒仍由微信訂閱訊息發送。', 'Plays the system default sound when a reminder is due; no custom ringtone is loaded. Background alerts still come from WeChat subscription messages.', 'Plays the system default sound when a reminder is due; no custom ringtone is loaded. Background alerts still come from WeChat subscription messages.', '期限が来るとシステム標準の通知音を鳴らします。カスタム着信音は読み込みません。バックグラウンド通知は微信の購読メッセージから届きます。', '알림 시각에 시스템 기본음을 재생하며 사용자 지정 벨소리는 불러오지 않습니다. 백그라운드 알림은 여전히 위챗 구독 메시지로 전달됩니다.', 'Zum Fälligkeitszeitpunkt wird der System-Standardton abgespielt, ohne eigenen Klingelton zu laden. Hintergrund-Erinnerungen kommen weiterhin über WeChat-Abonnementnachrichten.', 'À l’échéance, le son par défaut du système est joué, sans charger de sonnerie personnalisée. Les rappels en arrière-plan proviennent toujours des messages d’abonnement WeChat.', 'Al vencer el recordatorio suena el tono predeterminado del sistema, sin cargar tonos personalizados. Los avisos en segundo plano siguen llegando por mensajes de suscripción de WeChat.', 'Alla scadenza viene riprodotto il suono predefinito di sistema, senza caricare suonerie personalizzate. Gli avvisi in background arrivano comunque dai messaggi di abbonamento WeChat.', 'No horário do lembrete toca o som padrão do sistema, sem carregar toque personalizado. Os avisos em segundo plano continuam via mensagens de assinatura do WeChat.'],
+  snd_test_ok: ['已播放默认提示音', '已播放預設提示音', 'Default sound played', 'Default sound played', '既定の通知音を再生しました', '기본 알림음을 재생했습니다', 'Standardton abgespielt', 'Son par défaut joué', 'Tono predeterminado reproducido', 'Suono predefinito riprodotto', 'Som padrão reproduzido'],
+  snd_unsupported: ['当前环境不支持网页音频，将只使用系统通知音', '目前環境不支援網頁音訊，只會使用系統通知音', 'Web audio is unavailable here; only system notification sounds will be used', 'Web audio is unavailable here; only system notification sounds will be used', 'この環境では Web 音声を利用できないため、システム通知音のみ使用します', '이 환경에서는 웹 오디오를 사용할 수 없어 시스템 알림음만 사용합니다', 'Web-Audio ist hier nicht verfügbar; es werden nur System-Benachrichtigungstöne verwendet', 'L’audio web n’est pas disponible ici ; seuls les sons de notification système seront utilisés', 'El audio web no está disponible aquí; solo se usarán los sonidos de notificación del sistema', 'L’audio web non è disponibile qui; verranno usati solo i suoni di notifica di sistema', 'O áudio web não está disponível aqui; apenas os sons de notificação do sistema serão usados'],
+}
+Object.keys(SND_EXTRA).forEach(function (k) { ROWS[k] = SND_EXTRA[k] })
+
 var EXTRA = {}
 Object.keys(ROWS).forEach(function (k) {
   var o = {}

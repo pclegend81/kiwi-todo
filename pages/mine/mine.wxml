@@ -28,6 +28,18 @@
     <view class="small muted" style="margin-top:10rpx">{{holidayFromText}}</view>
   </view>
 
+  <!-- 铃声提醒：到点用系统默认提示音，只放开关与试听，不加引导文案 -->
+  <view class="card">
+    <view class="row-between">
+      <text class="title">{{T.snd_title}}</text>
+      <text class="small muted">{{soundOn ? T.snd_on : T.snd_off}}</text>
+    </view>
+    <view class="row auth-btns">
+      <view class="btn btn-ghost auth-btn" bindtap="onSoundToggle">{{soundOn ? T.snd_turn_off : T.snd_turn_on}}</view>
+      <view class="btn btn-ghost auth-btn" bindtap="onSoundTest">{{T.snd_test}}</view>
+    </view>
+  </view>
+
   <!-- 微信订阅消息推送：授权入口（只保留按钮，不加状态横幅/引导文案） -->
   <view class="card">
     <text class="title">{{T.mp_push_card}}</text>

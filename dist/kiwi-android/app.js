@@ -18,6 +18,7 @@
   var I18N_BASE = window.KIWI_I18N || {}
   var EXTRA = window.KIWI_I18N_EXTRA || {}
   var REGION_HOLIDAYS = window.KIWI_REGION_HOLIDAYS || {}
+  var SOUND = window.KIWI_SOUND || null   // 到点默认提示音（系统通知音 + Web Audio 合成音）
 
   var LS_TOKEN = 'kiwi_web_token'
   var LS_API = 'kiwi_web_api'
@@ -187,6 +188,7 @@
         editing: null,
         form: defaultForm(),
         lastSyncText: '',
+        soundOn: SOUND ? SOUND.enabled() : true,
       }
     },
 
@@ -599,9 +601,13 @@
         return isNaN(d.getTime()) ? '' : d.toLocaleString(this.locale(), { hour12: false })
       },
 
-      /** 页面打开期间的本地通知：只提示，不改数据；真正的微信提醒仍由 pusher 下发 */
+      /**
+       * 页面打开期间的本地提醒：只提示，不改数据；真正的微信提醒仍由 pusher 下发。
+       * 铃声与通知权限解耦：不少浏览器 / 系统的通知本身是静音的，权限没给也要响一声。
+       */
       checkDue: function () {
-        if (!this.bound || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+        if (!this.bound) return
+        var canNotify = typeof Notification !== 'undefined' && Notification.permission === 'granted'
         var now = Date.now()
         var list = this.todos || []
         for (var i = 0; i < list.length; i++) {
@@ -613,9 +619,28 @@
           var key = t.id + ':' + base
           if (base <= now && now - base < 60000 && !notified[key]) {
             notified[key] = true
-            try { new Notification(this.t('app_name') + ' · ' + (t.title || this.t('notify_remind')), { body: t.note || this.t('t_notif_body') }) } catch (e) {}
+            if (SOUND) SOUND.play()
+            if (canNotify) {
+              try { new Notification(this.t('app_name') + ' · ' + (t.title || this.t('notify_remind')), { body: t.note || this.t('t_notif_body') }) } catch (e) {}
+            }
           }
         }
+      },
+
+      /** 铃声提醒开关：开启时顺带播一声，用户立刻知道生效了 */
+      toggleSound: function () {
+        var on = !this.soundOn
+        if (SOUND) SOUND.setEnabled(on)
+        this.soundOn = on
+        if (on && SOUND) { SOUND.unlock(); SOUND.play() }
+        this.showToast(this.t(on ? 'snd_on' : 'snd_off'))
+      },
+
+      /** 试听系统默认提示音；环境不支持 Web Audio 时明确告知只会有系统通知音 */
+      testSound: function () {
+        if (!SOUND) { this.showToast(this.t('snd_unsupported')); return }
+        SOUND.unlock()
+        this.showToast(this.t(SOUND.play() ? 'snd_test_ok' : 'snd_unsupported'))
       },
     },
   })
@@ -630,6 +655,8 @@
   // 首次交互时申请通知权限（不能一进页面就弹，浏览器会拦）
   document.addEventListener('click', function requestOnce() {
     document.removeEventListener('click', requestOnce)
+    // AudioContext 必须在用户手势链里创建 / 恢复，否则到点播放会被浏览器拦掉
+    if (SOUND) SOUND.unlock()
     if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       try { Notification.requestPermission() } catch (e) {}
     }
