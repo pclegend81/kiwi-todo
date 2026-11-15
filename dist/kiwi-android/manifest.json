@@ -1,7 +1,7 @@
 {
   "name": "KIWI待办 · 网页版",
   "short_name": "KIWI待办",
-  "description": "与微信小程序互相同步的待办提醒应用，支持 13 种重复规则与中国大陆节假日。",
+  "description": "与微信小程序实时同步的待办提醒应用；13 种重复规则、11 种语言、按语言切换当地法定节假日，并支持到点铃声提醒。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

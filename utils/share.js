@@ -13,10 +13,20 @@
 const SHARE_TITLE = 'KIWI待办 · 重复提醒 + 节假日智能顺延'
 const SHARE_PATH = '/pages/index/index'
 
+/** 分享卡片标题跟随当前语言；i18n 不可用（旧包 / 测试桩）时回落默认中文 */
+function shareTitle() {
+  try {
+    const i18n = require('./i18n')
+    return i18n.t('inv_share_default') || SHARE_TITLE
+  } catch (e) {
+    return SHARE_TITLE
+  }
+}
+
 /** 转发给朋友 / 群聊。统一指向首页——编辑页带 id 转发给别人会查不到数据 */
 function onShareAppMessage() {
   return {
-    title: SHARE_TITLE,
+    title: shareTitle(),
     path: SHARE_PATH,
   }
 }
@@ -27,7 +37,7 @@ function onShareAppMessage() {
  * 所以只给首页挂，其余页面依赖登录，挂上去别人打开就是白屏。
  */
 function onShareTimeline() {
-  return { title: SHARE_TITLE }
+  return { title: shareTitle() }
 }
 
 module.exports = {

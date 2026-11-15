@@ -188,9 +188,10 @@ PC 专属能力：标题/备注搜索、侧栏计数与「下一次提醒」、�
 node tests/webapi.js     # 24 项：口令/token/CRUD/白名单/游标/幂等/归属
 node tests/webapp.js     # 18 项：模板编译/资源齐全/共享模块 md5/PWA 清单/登录链路
 node tests/oauth.js      # 34 项：八平台适配器/state 签名/PKCE/账号合并/未关联拦截
-node tests/i18n.js       # 24 项：11 语言字典/语言→地区→节假日行为级校验/6 页文案覆盖/多副本 md5
-node tests/sound.js      # 17 项：到点铃声/Web Audio 音色/开关/低版本振动兜底/两端接入点
-for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 18 个套件
+node tests/i18n.js          # 24 项：11 语言字典/语言→地区→节假日行为级校验/6 页文案覆盖/多副本 md5
+node tests/sound.js         # 17 项：到点铃声/Web Audio 音色/开关/低版本振动兜底/两端接入点
+node tests/release-check.js # 19 项：发布门禁（订阅消息链路/多端互通/交付一致性）+ 上架材料清单
+for t in tests/*.js; do node "$t" >/dev/null || echo "FAIL $t"; done   # 全量 19 个套件
 ```
 
 `tests/webapp.js` 会用 Vue 自带编译器在 Node 里把 `index.html` 的模板真编译一遍，
@@ -382,7 +383,7 @@ https://<你的静态托管域名>/oauth-callback.html
    标记、提醒预览、批量确认与删除弹窗也应是日文；登录页若配了 LINE 凭证
    应出现 LINE 按钮，切回简体中文则显示微信网页登录按钮。
 5. 本地跑 `node tests/i18n.js`（**24 项**，含 `store.mergeActiveHolidays` 的
-   行为级换表校验）与全量 18 个套件，全绿才说明联动与文案覆盖没回退。
+   行为级换表校验）与全量 19 个套件，全绿才说明联动与文案覆盖没回退。
 
 ---
 
@@ -442,3 +443,71 @@ Web 端 `webapp/sound.js`、小程序端 `utils/sound.js` 是同一套音色；
   其提示音由系统与微信设置决定（勿扰模式、静音键、通知权限都会影响）。
 - iOS 的静音拨键会同时压掉 Web Audio 合成音；Android 媒体音量过低也听不到。
 - 铃声提醒是端上补充，**不改变云端 `pusher` 的下发时机与节假日口径**。
+
+
+---
+
+## L. App Store 上架准备（2026-11-15）
+
+### L-1 先看清现状：目前没有可提交的东西
+
+| 事实 | 说明 |
+|---|---|
+| 现有交付物 | 微信小程序 + 一套 Web/PWA（`dist/kiwi-{pc,android,ios}.zip`），**没有 `.ipa`、没有 Xcode 工程** |
+| App Store 不收 | 微信小程序本身；以及「只是把网页塞进 WKWebView」的纯壳（Guideline **4.2 Minimum Functionality**） |
+| 本环境限制 | Windows，无 Xcode / Apple 签名证书，**编译不了 `.ipa`**（此前已确认） |
+| 必备前置 | Apple Developer Program 年费账号、Mac + Xcode、App Store Connect 应用记录 |
+
+`PUBLISH.md` 里此前记录的决策是「不走原生三件套」，本次「准备申请苹果商店」等于要改这个决策，
+**L-2 的路径选择必须先拍板**，否则后面做的材料可能全部作废。
+
+### L-2 与微信提醒的根本冲突（最关键）
+
+微信订阅消息**只能在微信客户端内下发**，原生 iOS App 收不到。当前的后台提醒链路是
+`pusher` 每分钟扫库 → `subscribeMessage.send`；而 WKWebView 里那个 20 秒轮询在 App
+退到后台后会被系统挂起，**不能当作提醒用**。所以只要上架原生 App，提醒就得重做：
+
+| 路径 | 到点提醒 | 工作量 | 结论 |
+|---|---|---|---|
+| **A. 维持 PWA，不进 App Store** | 仍是微信订阅消息；iOS 用 Safari「添加到主屏幕」 | 零 | 商店里搜不到，但功能完整 |
+| **B. Capacitor / WKWebView 壳 + 本地通知**（若要上架，推荐） | 同步后把未来 N 天提醒注册成 `UNUserNotificationCenter` 本地通知，长期提醒再接 APNs | 中高：原生工程 + 通知插件 + Mac/Xcode + 审核 | 需独立改造，云函数侧要新增「按设备下发提醒时刻」接口 |
+| **C. Flutter / React Native 重写原生** | APNs | 高 | 与现有 `webapp/` 代码复用率低 |
+
+走 B 时为了满足 4.2，壳里必须有真正的原生能力，不能只是打开一个 URL：
+本地通知、写系统日历（`EKEventStore`，对应小程序已有的 `wx.addPhoneCalendar`）、
+Widget / Siri 快捷指令、分享扩展里任选 2~3 项并做成主流程的一部分。
+
+### L-3 无论选哪条路径都要备齐的材料
+
+| 材料 | 现状 | 说明 |
+|---|---|---|
+| 隐私政策页（Privacy Policy URL） | ❌ 缺 | App Store Connect 必填，且 App 内必须可访问；需覆盖待办内容、位置备注、图片、OAuth 身份标识、设备 token |
+| 1024×1024 无圆角图标 | ❌ 缺 | 现只有 `icon-192.png` / `icon-512.png`；不能带圆角或透明通道 |
+| App Privacy 隐私营养标签 | ❌ 未填 | 逐项声明「是否收集 / 用途 / 是否关联身份 / 是否用于追踪」 |
+| Info.plist 权限描述 | ❌ 缺 | `NSCalendarsUsageDescription`、`NSPhotoLibraryUsageDescription`、`NSLocationWhenInUseUsageDescription`、通知权限——与小程序 `app.json` 的 `scope.*` 一一对应 |
+| 商店元数据 | ❌ 未填 | 名称/副标题/描述/关键词/分类/年龄分级/支持 URL/版权/本地化（已支持 11 语言，可复用字典） |
+| 截图与预览 | ❌ 缺 | 6.9″ / 6.5″ / iPad 尺寸；若不做 iPad 适配需说明 |
+| 审核用可登录账号 | ⚠ 有坑 | 审核员没有你的微信小程序，拿不到 8 位同步口令；需预置演示账号或在壳里加「演示模式」，否则可能以「无法登录」被拒 |
+| Sign in with Apple | ✅ 已具备 | 8 平台 OAuth 里已有 `apple`；若上架原生包，优先把它作为主登录，规避 5.1.1(v) |
+
+### L-4 本轮已做 / 建议下一步
+
+已做（与路径无关，不会白做）：
+
+- `webapp/manifest.json` 描述修正为 11 语言 + 当地节假日（原先仍写「中国大陆节假日」）。
+- `utils/share.js` 分享卡片标题跟随当前语言（原先写死中文）。
+- 新增 `tests/release-check.js` **19 项发布门禁**：订阅消息触发器/模板 ID 三处一致/
+  `MINIPROGRAM_STATE`/时区/三游标/额度守卫/6 页冒泡补额度、webapi 12 action/401 与 409
+  /协作字段白名单/8 平台 regions/分享挂载、以及 5+4+3 组共享副本 md5。
+  末尾会打印发布状态与 App Store 材料缺口，可用作提审前 checklist。
+
+下一步（**需先确认 L-2 路径**）：产出双语隐私政策页、1024 图标、原生壳工程与本地通知插件。
+这些在本环境只能准备源码/资源，最终 `.ipa` 仍需在 Mac 上签名上传。
+
+### L-5 发布前必改项（与 App Store 无关，但会卡住正式版）
+
+1. `pusher` / `pushapi` 两处 `MINIPROGRAM_STATE` 由 `trial` 改 `formal`，重部署两个云函数
+   并更新 BUILD；**只上传 `index.js` 不够**，`pusher/config.json` 触发器要单独上传。
+2. 8 个 OAuth 平台真凭证（尤其 LINE / Kakao / Naver），未配会自动隐藏按钮。
+3. `web_bindings` / `users` / `identities` 三个集合权限设为「仅管理端可读写」。
+4. 跑 `node tests/release-check.js` + 全量 19 个套件，再按 J-4、K-3 做真机验收。
